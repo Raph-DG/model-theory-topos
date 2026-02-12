@@ -9,10 +9,10 @@ variable {α : Type u}
 
 section MatrixNotation
 
-@[simp]
-theorem vecAppend_empty {n} (v : Fin n → α) : vecAppend rfl v ![] = v := by
-  ext
-  simp [vecAppend_eq_ite]
+-- @[simp]
+-- theorem vecAppend_empty {n} (v : Fin n → α) : vecAppend rfl v ![] = v := by
+--   ext
+--   simp [vecAppend_eq_ite]
 
 def vecLast {α} {n : ℕ} (v : Fin n.succ → α) : α :=
   v (Fin.last n)

@@ -1,4 +1,3 @@
-import Mathlib.Data.Matrix.Notation
 import Mathlib.CategoryTheory.Subobject.Basic
 import Mathlib.CategoryTheory.Subobject.Lattice
 import Mathlib.CategoryTheory.Limits.Shapes.FiniteLimits
@@ -8,6 +7,7 @@ import Mathlib.CategoryTheory.Limits.Shapes.RegularMono
 import Mathlib.SetTheory.Cardinal.Regular
 import Mathlib.SetTheory.Cardinal.Basic
 import ModelTheoryTopos.Geometric.Syntax.Term
+import ModelTheoryTopos.ForMathlib.Data.Fin.VecNotation
 
 /-!
 # Formulas and friends
