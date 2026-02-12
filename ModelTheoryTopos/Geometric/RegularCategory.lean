@@ -3,8 +3,13 @@ import Mathlib.CategoryTheory.EffectiveEpi.Basic
 import Mathlib.CategoryTheory.MorphismProperty.Limits
 import Mathlib.CategoryTheory.Limits.Shapes.FiniteLimits
 import Mathlib.CategoryTheory.Limits.Shapes.Images
+import Mathlib.CategoryTheory.Limits.Preorder
+import Mathlib.CategoryTheory.Limits.Constructions.LimitsOfProductsAndEqualizers
+import Mathlib.CategoryTheory.RegularCategory.Basic
+import Mathlib.CategoryTheory.Subobject.Lattice
+import Mathlib.SetTheory.Cardinal.HasCardinalLT
 
-open CategoryTheory Limits
+open CategoryTheory Limits Regular
 
 universe u v w
 
@@ -14,20 +19,24 @@ section
 
 variable (κ : Type w) (C : Type u) [Category.{v} C]
 
-class Regular extends HasFiniteLimits C, Limits.HasStrongEpiMonoFactorisations C where
-  strongIsRegular {X Y : C} (f : X ⟶ Y) : StrongEpi f → EffectiveEpi f
-  RegularStable {X Y Y' S : C} {f : X ⟶ S} {g : Y ⟶ S} {f' : Y' ⟶ Y}
-    {h : Y' ⟶ X} (sq : IsPullback f' h g f) (hg : RegularEpi g) : RegularEpi h
+/-
+This class is due to Robin Carlier. It's purpose is to allow for the `OrderBot` instance.
+See https://leanprover.zulipchat.com/#narrow/channel/113489-new-members/topic/Workaround.20.60cannot.20find.20synthesization.20order.20for.20instance.60.3F/near/573236295
+-/
+class HasFalses (C : Type u) [Category.{v} C] where
+  hasInitial_subobject (X : C) : HasInitial (Subobject X)
 
-attribute [instance] Regular.strongIsRegular Regular.RegularStable
+attribute [instance] HasFalses.hasInitial_subobject
 
-class Geometric extends Regular C where
-  has_false (X : C) : HasInitial (Subobject X)
+noncomputable instance {C: Type*} [Category* C] (X : C) [HasFalses C] : OrderBot (Subobject X) :=
+  Preorder.orderBotOfHasInitial (C := (Subobject X))
+
+class Geometric extends Regular C, HasFalses C where
   has_joins_subobject (X : C) (I : Set κ) : HasCoproductsOfShape I (Subobject X)
   isJoin_isStableUnderBaseChange {Y X : C} (f : Y ⟶ X) {I : Set κ} (fP : I → Subobject X) :
     ∐ (fun (i : I) ↦ (Subobject.pullback f).obj (fP i)) = (Subobject.pullback f).obj (∐ fP)
 
-attribute [instance] Geometric.has_false Geometric.has_joins_subobject
+attribute [instance] Geometric.has_joins_subobject
 attribute [simp] Geometric.isJoin_isStableUnderBaseChange
 
 abbrev Coherent := Geometric C Bool
@@ -39,36 +48,97 @@ namespace Geometric
 variable {κ : Type w} {C : Type u} [Category.{v} C]
 variable [geo : Geometric κ C]
 
-def emptymap (X : C) : Set.Elem (fun (_ : κ) ↦ False) → Subobject X := fun i ↦ by
-  obtain ⟨val, property⟩ := i
-  have := property.out
-  simp_all only
+lemma emptyJoin_eq_bot (X : C) : ∐ (fun (i : (∅ : Set κ)) ↦ by aesop) = (⊥ : Subobject X) := by
+  apply le_bot_iff.mp
+  apply leOfHom
+  apply Limits.Sigma.desc
+  grind
 
-noncomputable def initialSubobject (X : C) : Subobject X :=
-  let empty : Set κ := ∅
-  ∐ (fun (i : empty) ↦ by
-  obtain ⟨val, property⟩ := i
-  simp_all only [Set.mem_empty_iff_false, empty])
+@[simp]
+lemma bot_isStableUnderBaseChange {Y X : C} (f : Y ⟶ X) :
+    (Subobject.pullback f).obj ⊥ = ⊥ := by
+  rw [← emptyJoin_eq_bot (κ := κ), ← emptyJoin_eq_bot (κ := κ), ← isJoin_isStableUnderBaseChange]
+  rw [emptyJoin_eq_bot (κ := κ)]
+  apply le_bot_iff.mp
+  apply leOfHom
+  apply Limits.Sigma.desc
+  grind
 
-def initialHom {X : C} (m : Subobject X) : initialSubobject (κ := κ) X ⟶ m := by
-  constructor
-  constructor
-  sorry
+end Geometric
 
-instance (X : C) : HasInitial (Subobject X) := by
-  let myEmpty : Set κ := ∅
-  let f : myEmpty → Subobject X := fun i ↦ by aesop
-  sorry
+section goodFrobenius
 
-instance (X : C) : OrderBot (Subobject X) := by sorry
+namespace Regular
+open Subobject
 
--- Show
-instance (X : C) : HasBinaryProducts (Subobject X) := by sorry
+variable {C : Type u} [Category.{v} C] [Regular C]
 
-theorem frobenius {X Y : C} (f : X ⟶ Y) (x : Subobject X) (y : Subobject Y) :
-  (Subobject.exists f).obj (Limits.prod x ((Subobject.pullback f).obj y)) =
-     Limits.prod ((Subobject.exists f).obj x) y :=
-  sorry
+instance (X : C) : HasFiniteProducts (Subobject X) := hasFiniteProducts_of_has_binary_and_terminal
+
+variable {P X Y Z : C} {fst : P ⟶ X} {snd : P ⟶ Y} {f : X ⟶ Z} {g : Y ⟶ Z}
+  (h : IsPullback fst snd f g) (A : Subobject Y)
+
+/--
+     snd* A ------frob-------▷ f* ∃g(A)
+        /|                     /|
+       / |                    / |
+      /  |                   /  |
+     V   |                  V   |
+    P ---------fst-------> X    |
+    |    |                 |    |
+    |    V                 |    V
+    |    A ----------------|-▷ ∃g(A)
+  snd   /                  f   /
+    |  /                   |  /
+    | /                    | /
+    VV                     VV
+    Y ----------g--------> B
+-/
+noncomputable def frobeniusMorphism' :
+  underlying.obj ((Subobject.pullback snd).obj A) ⟶
+    underlying.obj ((Subobject.pullback f).obj ((«exists» g).obj A)) :=
+  (Subobject.isPullback f ((«exists» g).obj A)).lift
+    (Subobject.pullbackπ snd A ≫ (Subobject.imageFactorisation g A).F.e)
+    (((Subobject.pullback snd).obj A).arrow ≫ fst)
+    (by simp [h.w, ← imageFactorisation_F_m, ← (Subobject.isPullback snd _).w_assoc,
+      (Subobject.imageFactorisation g A).F.fac])
+
+lemma frobeniusMorphism'IsPullback :
+  IsPullback (frobeniusMorphism' h A) (Subobject.pullbackπ snd A)
+    (Subobject.pullbackπ f ((«exists» g).obj A)) (Subobject.imageFactorisation g A).F.e := by
+  apply IsPullback.of_right (t := (Subobject.isPullback f ((«exists» g).obj A)).flip)
+    (p := by simp [frobeniusMorphism'])
+  simp [frobeniusMorphism', ← imageFactorisation_F_m]
+  apply (Subobject.isPullback snd A).flip.paste_horiz
+  exact h
+
+instance : IsRegularEpi (frobeniusMorphism' h A) := by
+  apply regularEpiIsStableUnderBaseChange.of_isPullback (frobeniusMorphism'IsPullback h A).flip
+  simp only [MorphismProperty.regularEpi_iff]
+  have := strongEpi_of_strongEpiMonoFactorisation (strongEpiMonoFactorisation (A.arrow ≫ g))
+    (imageFactorisation g A).isImage
+  infer_instance
+
+@[simps!]
+noncomputable def frobeniusStrongEpiMonoFactorisation' :
+    StrongEpiMonoFactorisation <| ((Subobject.pullback snd).obj A).arrow ≫ fst where
+  I := underlying.obj ((Subobject.pullback f).obj ((«exists» g).obj A))
+  m := ((Subobject.pullback f).obj ((«exists» g).obj A)).arrow
+  e := frobeniusMorphism' h A
+  fac := by simp [frobeniusMorphism']
+
+include h in
+theorem frobenius_reciprocity :
+    («exists» fst).obj ((Subobject.pullback snd).obj A) =
+      (Subobject.pullback f).obj ((«exists» g).obj A) :=
+  eq_of_comm
+    (IsImage.isoExt (imageFactorisation _ _).isImage
+      (frobeniusStrongEpiMonoFactorisation' h A).toMonoIsImage)
+    (IsImage.isoExt_hom_m (imageFactorisation _ _).isImage
+      (frobeniusStrongEpiMonoFactorisation' h A).toMonoIsImage)
+
+end Regular
+end goodFrobenius
 
 /- # TODO lemmas
 After more stuff is added, most of these will not have to be even mentioned,
@@ -89,5 +159,3 @@ subobject is the following:
 6. From the previous, it should be automatically inferred that the poset of
    subobjects has the structure it should have.
 -/
-
-end CategoryTheory.Geometric

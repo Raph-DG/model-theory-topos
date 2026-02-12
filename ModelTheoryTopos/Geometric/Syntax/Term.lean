@@ -1,4 +1,3 @@
-import Mathlib.Data.Matrix.Notation
 import Mathlib.CategoryTheory.Subobject.Basic
 import Mathlib.CategoryTheory.Subobject.Lattice
 import Mathlib.CategoryTheory.Limits.Shapes.FiniteLimits
@@ -8,7 +7,7 @@ import Mathlib.CategoryTheory.Limits.Shapes.RegularMono
 import ModelTheoryTopos.Geometric.Syntax.Signature
 import Mathlib.Data.Fin.Basic
 import Mathlib.Data.Finset.Basic
-import ModelTheoryTopos.ForMathlib.Data.Fin.VecNotation
+import Mathlib.Data.Fin.VecNotation
 
 /-!
 # Contexts and terms
@@ -156,12 +155,12 @@ lemma Context.Hom.consId_naturality {ys xs : S.Context} (σ : ys ⟶ xs) {A : S}
 
 @[simp]
 lemma Context.Hom.cons_π (xs : S.Context) (A : S) (t : ⊢ᵗ[xs] A):
-  Context.Hom.consId t ≫ xs.π A = 𝟙 _ := by
+    Context.Hom.consId t ≫ xs.π A = 𝟙 _ := by
   funext i
   simp [CategoryStruct.comp, Context.Hom.consId,
     Context.π, Term.subst, CategoryStruct.id, Context.Hom.cons]
 
 lemma Context.π_naturality (A : S) (σ : xs ⟶ ys) :
-  (Context.consFunctor A).map σ ≫ ys.π A = xs.π A ≫ σ := by rfl
+  (Context.consFunctor A).map σ ≫ ys.π A = xs.π A ≫ σ := rfl
 
 end Signature

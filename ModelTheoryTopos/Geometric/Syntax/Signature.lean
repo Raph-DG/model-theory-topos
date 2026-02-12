@@ -1,4 +1,3 @@
-import Mathlib.Data.Matrix.Notation
 import Mathlib.CategoryTheory.Subobject.Basic
 import Mathlib.CategoryTheory.Subobject.Lattice
 import Mathlib.CategoryTheory.Limits.Shapes.FiniteLimits
