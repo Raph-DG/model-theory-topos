@@ -7,7 +7,9 @@ import Mathlib.CategoryTheory.Limits.Preorder
 import Mathlib.CategoryTheory.Limits.Constructions.LimitsOfProductsAndEqualizers
 import Mathlib.CategoryTheory.RegularCategory.Basic
 import Mathlib.CategoryTheory.Subobject.Lattice
+import Mathlib.CategoryTheory.Limits.Constructions.Over.Basic
 import Mathlib.SetTheory.Cardinal.HasCardinalLT
+import ModelTheoryTopos.ForMathlib.Subobject
 
 open CategoryTheory Limits Regular
 
@@ -64,6 +66,21 @@ lemma bot_isStableUnderBaseChange {Y X : C} (f : Y ⟶ X) :
   apply Limits.Sigma.desc
   grind
 
+lemma inf_join_eq_join_inf {X : C} {I : Set κ} (P : Subobject X) (Qᵢ : I → Subobject X) :
+    (P ⨯ ∐ Qᵢ) = ∐ (fun i ↦ P ⨯ Qᵢ i) := by
+  rw [Subobject.prod_eq_inf, Subobject.inf_eq_map_pullback'', ← Geometric.isJoin_isStableUnderBaseChange]
+  have := Subobject.mapPullbackAdj P.arrow
+  have : (Subobject.map P.arrow).obj (∐ fun i ↦ (Subobject.pullback P.arrow).obj (Qᵢ i)) =
+     (∐ fun i ↦ (Subobject.map P.arrow).obj <| (Subobject.pullback P.arrow).obj (Qᵢ i)) := by
+    apply Subobject.skeletal
+    constructor
+    have := (Subobject.mapPullbackAdj P.arrow).isLeftAdjoint
+    apply PreservesCoproduct.iso
+  rw [this]
+  congr
+  funext
+  rw [← Subobject.inf_eq_map_pullback'', Subobject.prod_eq_inf]
+
 end Geometric
 
 section goodFrobenius
@@ -73,7 +90,8 @@ open Subobject
 
 variable {C : Type u} [Category.{v} C] [Regular C]
 
-instance (X : C) : HasFiniteProducts (Subobject X) := hasFiniteProducts_of_has_binary_and_terminal
+/- Sanity check. -/
+example (X : C) : HasFiniteProducts (Subobject X) := inferInstance
 
 variable {P X Y Z : C} {fst : P ⟶ X} {snd : P ⟶ Y} {f : X ⟶ Z} {g : Y ⟶ Z}
   (h : IsPullback fst snd f g) (A : Subobject Y)

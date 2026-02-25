@@ -4,14 +4,18 @@ import Mathlib.CategoryTheory.Limits.HasLimits
 import Mathlib.CategoryTheory.Skeletal
 import Mathlib.CategoryTheory.Limits.Creates
 import Mathlib.CategoryTheory.Limits.Constructions.Over.Products
+import Mathlib.CategoryTheory.Limits.Constructions.Over.Basic
 import Mathlib.CategoryTheory.Limits.Constructions.FiniteProductsOfBinaryProducts
 import Mathlib.CategoryTheory.Limits.FullSubcategory
 import Mathlib.CategoryTheory.Limits.Shapes.Products
 import Mathlib.CategoryTheory.Limits.Shapes.BinaryProducts
+import Mathlib.CategoryTheory.Limits.Preorder
 import Mathlib.CategoryTheory.Subobject.Basic
 import Mathlib.CategoryTheory.Subobject.Lattice
 import Mathlib.CategoryTheory.Subobject.Limits
+import Mathlib.CategoryTheory.RegularCategory.Basic
 import ModelTheoryTopos.ForMathlib.Skeleton
+import ModelTheoryTopos.ForMathlib.ProductSubobject
 
 open CategoryTheory Limits
 
@@ -20,34 +24,61 @@ namespace CategoryTheory.Subobject
 universe v u
 variable {C : Type u} [Category.{v} C]
 
-theorem prod_pullback {I : Type*} {A B : C} (f : A ⟶ B) (X : I → Subobject B)
-    [HasPullbacks C] [HasProduct fun i ↦ (pullback f).obj (X i)] [HasProduct X] :
-  (∏ᶜ fun i ↦ (Subobject.pullback f).obj (X i)) =
-    (Subobject.pullback f).obj (∏ᶜ fun i ↦ X i) := by
-  sorry
-
--- noncomputable def representativeIso {X : C} (A : Subobjecy X) :
---       (toThinSkeleton _).obj (representative.obj A) = A :=
---   (equivMonoOver X).counitIso.app A
-
+noncomputable def toThinSkeleton_eq {X : C} (A : Subobject X) :
+    (toThinSkeleton _).obj (representative.obj A) = A :=
+  Subobject.skeletal _ ⟨((equivMonoOver X).unitIso.app _).symm⟩
 
 theorem inf_eq_map_pullback'' [HasPullbacks C] {A : C} (f₁ : Subobject A) (f₂ : Subobject A) :
     (f₁ ⊓ f₂ : Subobject A) = (map f₁.arrow).obj ((pullback f₁.arrow).obj f₂) := by
-  have :=  inf_eq_map_pullback' (representative.obj f₁) f₂
-  convert this
+  convert inf_eq_map_pullback' (representative.obj f₁) f₂
   ext1
-  rw [inf_def]
+  nth_rw 1 [← toThinSkeleton_eq f₁]
   congr
-  apply Subobject.skeletal
-  constructor
-  exact (equivMonoOver A).unitIso.app f₁
 
+noncomputable def underlyingIsoMap' {A X Y : C} (f : X ⟶ Y) [Mono f] (A' : A ⟶ X) [Mono A'] :
+    underlying.obj ((Subobject.map f).obj (Subobject.mk A')) ≅ A := by
+  simp [map, lower, mk, ThinSkeleton.mk, Quotient.mk']
+  exact underlyingIso ((MonoOver.map f).obj (MonoOver.mk A')).arrow
 
-theorem prod_pullback {I : Type*} {A B : C} (f : A ⟶ B) (X : I → Subobject B)
-    [HasPullbacks C] [HasProduct fun i ↦ (pullback f).obj (X i)] [HasProduct X] :
+-- noncomputable def underlyingIsoMap'' {A X Y : C} (f : X ⟶ Y) [Mono f] (A : MonoOver X) :
+--     underlying.obj ((MonoOver.map f).o)) ≅ A := by
+--   simp [map, lower, mk, ThinSkeleton.mk, Quotient.mk']
+--   exact underlyingIso ((MonoOver.map f).obj (MonoOver.mk A')).arrow
+
+def underlyingMapIso {X Y : C} (f : X ⟶ Y) [Mono f] (A : Subobject X) :
+    underlying.obj ((Subobject.map f).obj A) ≅ underlying.obj A := by
+  -- nth_rw 1 [← toThinSkeleton_eq A]
+  -- simp only [map, lower, ThinSkeleton.map, toThinSkeleton, ThinSkeleton.mk, Quotient.mk']
+  -- rw [Quotient.map_mk (MonoOver.map f).obj]
+  sorry
+
+lemma underlyingMapIso_eq {X Y : C} (f : X ⟶ Y) [Mono f] (A : Subobject X) :
+    A.arrow ≫ f = (underlyingMapIso f A).inv ≫ ((Subobject.map f).obj A).arrow  :=
+  sorry
+
+theorem prod_pullback {n : ℕ} {A B : C} (f : A ⟶ B) (X : Fin n → Subobject B) [HasFiniteLimits C] :
   (∏ᶜ fun i ↦ (Subobject.pullback f).obj (X i)) =
     (Subobject.pullback f).obj (∏ᶜ fun i ↦ X i) := by
-  sorry
+  refine Subobject.skeletal _ ⟨?_⟩
+  let mycone : Cone (Discrete.functor fun i ↦ (pullback f).obj (X i)) := {
+    pt := (Subobject.pullback f).obj (∏ᶜ fun i ↦ X i)
+    π := ⟨fun i ↦ (pullback f).map <| Pi.π _ i.as, by cat_disch⟩
+  }
+  have : IsLimit mycone := {
+    lift s := by
+      apply homOfFactors
+      simp [mycone]
+      apply pullback_factors
+      apply product_factors
+      intro i
+      rw [factors_iff]
+      refine ⟨underlying.map (s.π.app ⟨i⟩) ≫ pullbackπ f _, ?_⟩
+      simp
+      rw [(isPullback f _).w]
+      simp
+  }
+  simpa using IsLimit.conePointUniqueUpToIso
+    (productIsProduct fun i ↦ (Subobject.pullback f).obj (X i)) this
 
 instance skeletal_subobject (X : C) : Skeletal (Subobject X) := ThinSkeleton.skeletal
 

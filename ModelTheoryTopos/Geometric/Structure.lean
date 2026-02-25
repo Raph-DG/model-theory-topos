@@ -141,7 +141,7 @@ def Context.interpretConsIso (xs : S.Context) (A : S) :
   inv := Pi.lift (Fin.cases prod.fst (fun i ↦ prod.snd ≫ Pi.π _ i))
   hom_inv_id := by apply Pi.hom_ext; intro i; cases i using Fin.cases <;> simp
 
-lemma Context.trftrft {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} :
+lemma Context.interpretConsIso_naturality {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} :
     prod.map (𝟙 _) ⟦M|σ⟧ʰ ≫ (interpretConsIso M xs A).inv =
       (interpretConsIso M ys A).inv ≫ ⟦M|(consFunctor A).map σ⟧ʰ := by
   apply Pi.hom_ext
@@ -149,9 +149,7 @@ lemma Context.trftrft {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} :
   cases i using Fin.cases with
   | zero => simp [interpretConsIso, consFunctor, Hom.cons, Term.interpret_var]
   | succ i =>
-    simp
-    simp [interpretConsIso, consFunctor, Hom.cons]
-    simp [CategoryStruct.comp]
+    simp [interpretConsIso, consFunctor, Hom.cons, CategoryStruct.comp]
     rw [← Category.assoc]
     congr
     apply (cancel_epi (interpretConsIso M ys A).hom).mp
@@ -178,13 +176,12 @@ lemma Context.Hom.consId_equalizer {A : S} {t1 t2 : ⊢ᵗ[xs] A}
   · apply equalizerSubobject_factors
     rw [Context.Hom.consIdCompπ, Context.Hom.consIdCompπ, equalizerSubobject_arrow_comp_assoc]
   · apply equalizerSubobject_factors
-    rw! [Context.Hom.consIdCompπ]
-    rw! [Context.Hom.consIdCompπ]
-    have : Mono (Pi.π (fun i ↦ ⟦M|(A ∶ xs).nth i⟧ᵈ) 0) := sorry
-    apply (cancel_mono (Pi.π (fun i ↦ ⟦M|(A ∶ xs).nth i⟧ᵈ) 0)).mp
+    apply Pi.hom_ext
+    intro i
     simp
-    sorry
-
+    cases i using Fin.cases with
+    | zero => simp [consId, cons]; exact equalizerSubobject_arrow_comp ⟦M|t1⟧ᵗ ⟦M|t2⟧ᵗ
+    | succ i => simp [consId, cons]
 
 @[simp]
 lemma Term.interpret_subst
@@ -209,7 +206,7 @@ lemma Context.Hom.interpret_comp (σ : xs ⟶ ys) (σ' : ys ⟶ zs) :
 
 lemma Context.consFunctor_IsPullback {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} :
     IsPullback ⟦M|ys.π A⟧ʰ ⟦M|(Context.consFunctor A).map σ⟧ʰ ⟦M|σ⟧ʰ ⟦M|xs.π A⟧ʰ := by
-    fapply IsPullback.of_iso <| IsPullback.of_prod_fst_with_id ⟦M|σ⟧ʰ ⟦M|A⟧ᵈ <;> try simp
+    fapply IsPullback.of_iso <| IsPullback.of_prod_fst_with_id ⟦M|σ⟧ʰ ⟦M|A⟧ᵈ <;> try simp -- ASK: why simp not triggering?
     · exact prod.braiding _ _ ≪≫ (Context.interpretConsIso M ys A).symm
     · exact Iso.refl _
     · exact prod.braiding _ _ ≪≫ (Context.interpretConsIso M xs A).symm
@@ -218,7 +215,7 @@ lemma Context.consFunctor_IsPullback {ys xs : S.Context} (σ : ys ⟶ xs) {A : S
       intro i
       simp [Term.interpret_π, interpretConsIso]
     · simp only [Iso.trans_hom, prod.braiding_hom, Iso.symm_hom, Category.assoc]
-      rw [← Context.trftrft, ← Category.assoc]
+      rw [← Context.interpretConsIso_naturality, ← Category.assoc]
       simp
     · simp
     · simp
@@ -341,7 +338,7 @@ lemma FormulaContext.interpret_cons
       apply Pi.π
 
 lemma FormulaContext.interpret_cons_pullback
-    {xs : Context S} (Γ : FormulaContext xs) {I : Set κ} (P : xs ⊢ᶠ𝐏) :
+    {xs : Context S} (Γ : FormulaContext xs) (P : xs ⊢ᶠ𝐏) :
     ⟦M|Γ.cons P⟧ᶠᶜ = (Subobject.map (⟦M|Γ⟧ᶠᶜ).arrow).obj
       (((Subobject.pullback (⟦M|Γ⟧ᶠᶜ).arrow).obj ⟦M|P⟧ᶠ)) := by
   rw [FormulaContext.interpret_cons, ← Subobject.inf_eq_map_pullback'', Subobject.prod_eq_inf]
@@ -349,21 +346,17 @@ lemma FormulaContext.interpret_cons_pullback
 lemma FormulaContext.interpret_subst
     {xs ys : Context S} (Γ : FormulaContext xs) (σ : ys ⟶ xs) :
     ⟦M|Γ.subst σ⟧ᶠᶜ = (Subobject.pullback ⟦M|σ⟧ʰ).obj ⟦M|Γ⟧ᶠᶜ := by
-  simp [FormulaContext.interpret, FormulaContext.subst_nth]
-  -- Products commute with pullbacks
-  sorry
+  simp [FormulaContext.interpret, FormulaContext.subst_nth, Subobject.prod_pullback]
+  rfl
 
 lemma FormulaContext.interpret_cons_join
     {xs : Context S} (Γ : FormulaContext xs) {I : Set κ} (Pᵢ : I → xs ⊢ᶠ𝐏) :
     ⟦M|Γ.cons (⋁' Pᵢ)⟧ᶠᶜ = ∐ fun i ↦ ⟦M|Γ.cons (Pᵢ i)⟧ᶠᶜ := by
-  rw [FormulaContext.interpret_cons_pullback]
-  unfold Formula.interpret
-  rw [← Geometric.isJoin_isStableUnderBaseChange]
-  simp
-  ext
-  · sorry
-  · sorry
-  · sorry
+  rw [FormulaContext.interpret_cons]
+  rw [Formula.interpret]
+  rw [Geometric.inf_join_eq_join_inf]
+  congr
+  funext; simp
 
 /--
 If there is a derivation of a formula `φ` in context `Γ`, then it is the case that
