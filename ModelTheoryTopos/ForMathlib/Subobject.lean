@@ -14,7 +14,6 @@ import Mathlib.CategoryTheory.Subobject.Basic
 import Mathlib.CategoryTheory.Subobject.Lattice
 import Mathlib.CategoryTheory.Subobject.Limits
 import Mathlib.CategoryTheory.RegularCategory.Basic
-import ModelTheoryTopos.ForMathlib.Skeleton
 import ModelTheoryTopos.ForMathlib.ProductSubobject
 
 open CategoryTheory Limits
@@ -40,22 +39,6 @@ noncomputable def underlyingIsoMap' {A X Y : C} (f : X ⟶ Y) [Mono f] (A' : A �
   simp [map, lower, mk, ThinSkeleton.mk, Quotient.mk']
   exact underlyingIso ((MonoOver.map f).obj (MonoOver.mk A')).arrow
 
--- noncomputable def underlyingIsoMap'' {A X Y : C} (f : X ⟶ Y) [Mono f] (A : MonoOver X) :
---     underlying.obj ((MonoOver.map f).o)) ≅ A := by
---   simp [map, lower, mk, ThinSkeleton.mk, Quotient.mk']
---   exact underlyingIso ((MonoOver.map f).obj (MonoOver.mk A')).arrow
-
-def underlyingMapIso {X Y : C} (f : X ⟶ Y) [Mono f] (A : Subobject X) :
-    underlying.obj ((Subobject.map f).obj A) ≅ underlying.obj A := by
-  -- nth_rw 1 [← toThinSkeleton_eq A]
-  -- simp only [map, lower, ThinSkeleton.map, toThinSkeleton, ThinSkeleton.mk, Quotient.mk']
-  -- rw [Quotient.map_mk (MonoOver.map f).obj]
-  sorry
-
-lemma underlyingMapIso_eq {X Y : C} (f : X ⟶ Y) [Mono f] (A : Subobject X) :
-    A.arrow ≫ f = (underlyingMapIso f A).inv ≫ ((Subobject.map f).obj A).arrow  :=
-  sorry
-
 theorem prod_pullback {n : ℕ} {A B : C} (f : A ⟶ B) (X : Fin n → Subobject B) [HasFiniteLimits C] :
   (∏ᶜ fun i ↦ (Subobject.pullback f).obj (X i)) =
     (Subobject.pullback f).obj (∏ᶜ fun i ↦ X i) := by
@@ -73,16 +56,11 @@ theorem prod_pullback {n : ℕ} {A B : C} (f : A ⟶ B) (X : Fin n → Subobject
       intro i
       rw [factors_iff]
       refine ⟨underlying.map (s.π.app ⟨i⟩) ≫ pullbackπ f _, ?_⟩
-      simp
-      rw [(isPullback f _).w]
-      simp
+      simp [(isPullback f _).w]
   }
-  simpa using IsLimit.conePointUniqueUpToIso
-    (productIsProduct fun i ↦ (Subobject.pullback f).obj (X i)) this
+  simpa using IsLimit.conePointUniqueUpToIso (productIsProduct _) this
 
 instance skeletal_subobject (X : C) : Skeletal (Subobject X) := ThinSkeleton.skeletal
-
-instance thin_subobject (X : C) : Quiver.IsThin (Subobject X) := by infer_instance
 
 noncomputable def subobject_comp {X Y : C} (m : Subobject X) (f : X ⟶ Y) [Mono f] : Subobject Y :=
   Subobject.mk (m.arrow ≫ f)

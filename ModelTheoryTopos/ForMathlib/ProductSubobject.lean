@@ -14,7 +14,6 @@ import Mathlib.CategoryTheory.Subobject.Basic
 import Mathlib.CategoryTheory.Subobject.Lattice
 import Mathlib.CategoryTheory.Subobject.Limits
 import Mathlib.CategoryTheory.RegularCategory.Basic
-import ModelTheoryTopos.ForMathlib.Skeleton
 
 open CategoryTheory Limits
 

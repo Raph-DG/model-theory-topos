@@ -56,11 +56,20 @@ instance {p} [Decidable p] [DecideTrue p] : Fact p where
 instance {n : ℕ} {xs : Fin (n + 1) → RingSignature} (i : ℕ) [Fact (i < n + 1)]:
     OfNat (⊢ᵗ[⟨n+1,xs⟩] (xs ⟨i,Fact.out⟩)) i where
   ofNat := .var (xs := ⟨n+1,xs⟩) ⟨i,Fact.out⟩
--- end of hack
+-- end of hack'
+
+/- The context with two variables in R. I.e., "x : R, y : R". -/
+example : RingSignature.Context := ⟨2, fun _ => R⟩
+
+/- The term "x : R, y : R ⊢ x + y" -/
+example : RingSignature.Term ⟨2, fun _ ↦ R⟩ R := 0 + 1
 
 /-- The theory of rings -/
 def RingTheory : RingSignature.Theory where
   axioms := {
+    -- This says that "x : R, y : R ⊢ x + y = y + x", are similarly interpreted
+    -- Sadly, the hack for de Bruijn indices requires us to specify what the type of the therm is,
+    -- so we write `(0 + 1 : ⊢ᵗ[_] R)`, i.e. "(x + y : R)".
     ⟨⟨2, fun _ => R⟩, ⊤', (0 + 1 : ⊢ᵗ[_] R) =' 1 + 0⟩,
     ⟨⟨3, fun _ => R⟩, ⊤', (0 + 1 + 2 : ⊢ᵗ[_] R) =' (0 + (1 + 2))⟩,
     ⟨⟨3, fun _ => R⟩, ⊤', (0 * 1 * 2 : ⊢ᵗ[_] R) =' (0 * (1 * 2))⟩
@@ -72,7 +81,7 @@ variable {κ} {X : Scheme}
 open TopCat
 
 variable (X) in
-instance presheafIsGeometric  : Geometric κ (Sheaf Type X) := sorry
+instance sheafIsGeometric  : Geometric κ (Sheaf Type X) := sorry
 
 variable (M : Structure RingSignature (Sheaf Type X))
 
