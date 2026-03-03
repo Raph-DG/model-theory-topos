@@ -224,22 +224,25 @@ lemma Context.consFunctor_IsPullback {ys xs : S.Context} (σ : ys ⟶ xs) {A : S
 end
 
 variable {S : Signature} {C : Type u} [Category.{v} C]
-variable [κ : SmallUniverse S] [G : Geometric κ C] (M : Structure S C)
+variable {κ : Cardinal.{w}} [κ_isRegular : Fact κ.IsRegular] [G : Geometric κ C] (M : Structure S C)
 
+variable (κ) in
 /-- The interpretation of a formula, by cases. -/
 @[reducible, simp]
 noncomputable def Formula.interpret {xs : Context S} : xs ⊢ᶠ𝐏 →
+-- noncomputable def Formula.interpret {xs : Context S} : S.Formula κ xs →
     (Subobject ⟦M | xs⟧ᶜ)
-  | .rel R t => (Subobject.pullback ⟦M | t⟧ᵗ).obj <| M.Relations R
-  | .true => ⊤
-  | .false => ⊥
-  | .conj φ ψ => φ.interpret ⨯ ψ.interpret
-  | .eq t1 t2 => equalizerSubobject ⟦M | t1⟧ᵗ ⟦M | t2⟧ᵗ
-  | .exists (A := A) φ => (Subobject.exists ((xs.π A).interpret M)).obj φ.interpret
-  | .infdisj φᵢ => ∐ (fun i ↦ Formula.interpret (φᵢ i))
+  | rel R t => (Subobject.pullback ⟦M | t⟧ᵗ).obj <| M.Relations R
+  | ⊤' => ⊤
+  | ⊥' => ⊥
+  | φ ∧' ψ => φ.interpret ⨯ ψ.interpret
+  | t1 =' t2 => equalizerSubobject ⟦M | t1⟧ᵗ ⟦M | t2⟧ᵗ
+  | ∃' φ => (Subobject.exists ((xs.π _).interpret M)).obj φ.interpret
+  | ⋁' φᵢ => ∐ (fun i ↦ Formula.interpret (φᵢ i))
 
-notation3:arg "⟦" M "|" φ "⟧ᶠ" =>
-  Formula.interpret M φ
+scoped syntax "⟦" term "|" term "⟧ᶠ" : term
+scoped macro_rules
+  | `(⟦ $M | $φ ⟧ᶠ) => `(Formula.interpret $(Lean.mkIdent `κ) $M $φ) -- -- Hack to not reference κ
 
 @[simp]
 lemma Formula.interpret_subst
@@ -268,11 +271,11 @@ lemma Formula.interpret_subst
 A model interprets a sequent if the interpretation of the premise is less than the interpretation of
 the conclusion in the poset of subobjects.
 -/
-def Sequent.interpret (U : S.Sequent) : Prop :=
+def Sequent.interpret (U : S.Sequent κ) : Prop :=
   ⟦M | U.premise⟧ᶠ ≤ ⟦M | U.concl⟧ᶠ
 
 /-- A model interprets a theory if it interprets all of its sequents. -/
-def Theory.interpret (T : S.Theory) : Prop := ∀ Seq ∈ T.axioms, Seq.interpret M
+def Theory.interpret (T : S.Theory κ) : Prop := ∀ Seq ∈ T, Seq.interpret M
 
 /--
 The interpretation of a formula context, which is the product of the interpretation of all its
@@ -280,14 +283,14 @@ formulas.
 -/
 @[reducible]
 noncomputable def FormulaContext.interpret
-    {xs : Context S} (Γ : FormulaContext xs) : Subobject ⟦M|xs⟧ᶜ :=
+    {xs : Context S} (Γ : FormulaContext κ xs) : Subobject ⟦M|xs⟧ᶜ :=
   ∏ᶜ (fun i ↦ ⟦M | Γ.nth i⟧ᶠ)
 
 notation3:arg "⟦" M "|" Γ "⟧ᶠᶜ" => FormulaContext.interpret (M := M) Γ
 
 @[simp]
 lemma FormulaContext.interpret_append
-    {xs : Context S} (Γ Δ : FormulaContext xs) :
+    {xs : Context S} (Γ Δ : FormulaContext κ xs) :
     ⟦M|Γ ++ Δ⟧ᶠᶜ = (⟦M|Γ⟧ᶠᶜ ⨯ ⟦M|Δ⟧ᶠᶜ) := by
   apply Subobject.skeletal_subobject
   simp [interpret]
@@ -317,7 +320,7 @@ lemma FormulaContext.interpret_append
 
 @[simp]
 lemma FormulaContext.interpret_cons
-    {xs : Context S} (Γ : FormulaContext xs) (φ : xs ⊢ᶠ𝐏) :
+    {xs : Context S} (Γ : FormulaContext κ xs) (φ : xs ⊢ᶠ𝐏) :
     ⟦M|Γ.cons φ⟧ᶠᶜ = (⟦M|Γ⟧ᶠᶜ ⨯ ⟦M|φ⟧ᶠ) := by
   apply Subobject.skeletal_subobject
   simp [interpret]
@@ -337,23 +340,23 @@ lemma FormulaContext.interpret_cons
       apply Pi.π
 
 lemma FormulaContext.interpret_cons_pullback
-    {xs : Context S} (Γ : FormulaContext xs) (P : xs ⊢ᶠ𝐏) :
+    {xs : Context S} (Γ : FormulaContext κ xs) (P : xs ⊢ᶠ𝐏) :
     ⟦M|Γ.cons P⟧ᶠᶜ = (Subobject.map (⟦M|Γ⟧ᶠᶜ).arrow).obj
       (((Subobject.pullback (⟦M|Γ⟧ᶠᶜ).arrow).obj ⟦M|P⟧ᶠ)) := by
   rw [FormulaContext.interpret_cons, ← Subobject.inf_eq_map_pullback'', Subobject.prod_eq_inf]
 
 lemma FormulaContext.interpret_subst
-    {xs ys : Context S} (Γ : FormulaContext xs) (σ : ys ⟶ xs) :
+    {xs ys : Context S} (Γ : FormulaContext κ xs) (σ : ys ⟶ xs) :
     ⟦M|Γ.subst σ⟧ᶠᶜ = (Subobject.pullback ⟦M|σ⟧ʰ).obj ⟦M|Γ⟧ᶠᶜ := by
   simp [FormulaContext.interpret, FormulaContext.subst_nth, Subobject.prod_pullback]
   rfl
 
 lemma FormulaContext.interpret_cons_join
-    {xs : Context S} (Γ : FormulaContext xs) {I : Set κ} (Pᵢ : I → xs ⊢ᶠ𝐏) :
+    {xs : Context S} (Γ : FormulaContext κ xs) {I : Type w} [Fact <| HasCardinalLT I κ] (Pᵢ : I → xs ⊢ᶠ𝐏) :
     ⟦M|Γ.cons (⋁' Pᵢ)⟧ᶠᶜ = ∐ fun i ↦ ⟦M|Γ.cons (Pᵢ i)⟧ᶠᶜ := by
   rw [FormulaContext.interpret_cons]
   rw [Formula.interpret]
-  rw [Geometric.inf_join_eq_join_inf]
+  rw [Geometric.inf_join_eq_join_inf (κ := κ)]
   congr
   funext; simp
 
@@ -361,10 +364,11 @@ lemma FormulaContext.interpret_cons_join
 If there is a derivation of a formula `φ` in context `Γ`, then it is the case that
 `⟦M | Γ⟧ᶠᶜ ≤ ⟦M | φ⟧ᶠ` whenever the model `M` satisfies all the axioms in theory.
 -/
-theorem Soundness {T : S.Theory} {xs : Context S} {Γ : FormulaContext xs} {φ : xs ⊢ᶠ𝐏} :
-  Derivation (T := T) Γ φ → Theory.interpret M T →
+theorem Soundness {T : S.Theory κ} {xs : Context S} {Γ : FormulaContext κ xs} {φ : xs ⊢ᶠ𝐏} :
+    Theory.interpret M T → Γ ⊢ᵈ φ →
+    -- Γ ⊢ᵈ φ → Theory.interpret M T →
     (⟦M | Γ⟧ᶠᶜ ≤ ⟦M | φ⟧ᶠ) := by
-  intro D int
+  intro int D
   induction D with
   | «axiom» φinT D hp =>
       apply le_trans hp; simp only [Formula.interpret_subst];
@@ -376,7 +380,7 @@ theorem Soundness {T : S.Theory} {xs : Context S} {Γ : FormulaContext xs} {φ :
   | conj_elim_l D h => exact (h.hom ≫ prod.fst).le
   | conj_elim_r D h => exact (h.hom ≫ prod.snd).le
   | disj_intro Pᵢ i D h => exact (h.hom ≫ Sigma.ι (fun i ↦ ⟦M|Pᵢ i⟧ᶠ) i).le
-  | @disj_elim xs Γ Q I Pᵢ D Dᵢ h h' =>
+  | @disj_elim xs Γ Q I _ Pᵢ D Dᵢ h h' =>
       apply leOfHom
       refine ?_ ≫ eqToHom (Γ.interpret_cons_join M Pᵢ) ≫ Sigma.desc (fun b ↦ (h' b).hom)
       simp only [FormulaContext.interpret_cons]

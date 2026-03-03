@@ -6,6 +6,7 @@ import Mathlib.CategoryTheory.MorphismProperty.Limits
 import Mathlib.CategoryTheory.Limits.Shapes.RegularMono
 import Mathlib.SetTheory.Cardinal.Regular
 import Mathlib.SetTheory.Cardinal.Basic
+import Mathlib.SetTheory.Cardinal.HasCardinalLT
 import ModelTheoryTopos.Geometric.Syntax.Term
 import ModelTheoryTopos.ForMathlib.Data.Fin.VecNotation
 
@@ -35,26 +36,15 @@ open Cardinal CategoryTheory
 
 variable {S : Signature}
 
-/-- Implementation detail to carry the indexing type of the disjunctions. -/
-class SmallUniverse (S : Signature) where
-  type : Type*
-
-attribute [coe] SmallUniverse.type
-
-instance : CoeSort (SmallUniverse S) Type* where
-  coe κ := κ.type
-
-variable [κ : SmallUniverse S]
-
 /-- Inductive definition of a formula over a context. -/
-inductive Formula : S.Context → Type* where
-  | rel {xs} (R : S.Relations) : Term xs (R.domain) → Formula xs
-  | true {xs} : Formula xs
-  | false {xs} : Formula xs
-  | conj {xs} : Formula xs → Formula xs → Formula xs
-  | infdisj {xs} {I : Set κ} : (I → Formula xs) → Formula xs
-  | eq {xs A} : ⊢ᵗ[xs] A → ⊢ᵗ[xs] A → Formula xs
-  | exists {A xs} : Formula (A ∶ xs) → Formula xs
+inductive Formula (κ : Cardinal.{w}) [κ_isRegular : Fact κ.IsRegular] : S.Context → Type _ where
+  | rel {xs} (R : S.Relations) : Term xs (R.domain) → Formula κ xs
+  | true {xs} : Formula κ xs
+  | false {xs} : Formula κ xs
+  | conj {xs} : Formula κ xs → Formula κ xs → Formula κ xs
+  | infdisj {xs} {I : Type w} [Fact <| HasCardinalLT I κ] : (I → Formula κ xs) → Formula κ xs
+  | eq {xs A} : ⊢ᵗ[xs] A → ⊢ᵗ[xs] A → Formula κ xs
+  | exists {A xs} : Formula κ (A ∶ xs) → Formula κ xs
 
 scoped notation:max "⊤'" => Formula.true
 scoped notation:max "⊥'" => Formula.false
@@ -63,10 +53,12 @@ scoped prefix:100 "⋁'" => Formula.infdisj
 scoped infixr:50 " =' " => Formula.eq
 scoped prefix:110 "∃'" => Formula.exists
 
-scoped syntax:25 term:51 " ⊢ᶠ𝐏" : term
 
+scoped syntax:25 term:51 " ⊢ᶠ𝐏" : term
 scoped macro_rules
-  | `($xs ⊢ᶠ𝐏) => `(Formula $xs)
+  | `($xs ⊢ᶠ𝐏) => `(Formula $(Lean.mkIdent `κ) $xs) -- Hack to not reference κ
+
+variable {κ : Cardinal.{w}} [κ_isRegular : Fact κ.IsRegular]
 
 /-- Substitution of a formula along a context morphism. -/
 @[reducible]
@@ -104,69 +96,70 @@ lemma Formula.subst_comp {zs : S.Context} (φ : zs ⊢ᶠ𝐏) :
   | eq _ _ => simp [Term.subst_comp]
   | @«exists» A zs φ h => simp; intro xs ys σ σ'; rw [← h]
 
+variable (κ) in
 /-- A `FormulaContext` is a vector of formulas. -/
 @[ext]
-structure FormulaContext (xs : S.Context) : Type* where
+structure FormulaContext (xs : S.Context) where
   length : ℕ
-  nth : Fin length → Formula xs
+  nth : Fin length → Formula κ xs
 
 /-- The empty formula context. -/
-def FormulaContext.nil (xs : S.Context) : FormulaContext xs where
+def FormulaContext.nil (xs : S.Context) : FormulaContext κ xs where
   length := 0
   nth := ![]
 
-variable {ys xs : S.Context} (Γ : FormulaContext xs)
+variable {ys xs : S.Context} (Γ : FormulaContext κ xs)
 
 @[simp]
-lemma FormulaContext.length_0_isNil (φ : Fin 0 → Formula xs) :
+lemma FormulaContext.length_0_isNil (φ : Fin 0 → Formula κ xs) :
     FormulaContext.mk 0 φ = FormulaContext.nil xs := by
   ext <;> simp [nil]; ext i; exact Fin.elim0 i
 
 /-- Extending a formula context with a new formula. -/
 @[reducible]
-def FormulaContext.cons (φ : Formula xs) : FormulaContext xs where
+def FormulaContext.cons (φ : Formula κ xs) : FormulaContext κ xs where
   length := Γ.length + 1
   nth := Matrix.vecCons φ Γ.nth
 
 @[simp]
-lemma FormulaContext.cons_nth0 (Γ : FormulaContext xs) (φ) : (Γ.cons φ).nth 0 = φ := by simp
+lemma FormulaContext.cons_nth0 (Γ : FormulaContext κ xs) (φ) : (Γ.cons φ).nth 0 = φ := by simp
 
 @[simp]
-lemma FormulaContext.lenght_cons (φ : Formula xs) : (Γ.cons φ).length = Γ.length + 1 := by
+lemma FormulaContext.lenght_cons (φ : Formula κ xs) : (Γ.cons φ).length = Γ.length + 1 := by
   simp
 
 /-- Extending a formula context with a new formula, by `snoc`-ing it. -/
-def FormulaContext.snoc (φ : Formula xs) : FormulaContext xs where
+def FormulaContext.snoc (φ : Formula κ xs) : FormulaContext κ xs where
   length := Γ.length + 1
   nth := Matrix.vecSnoc φ Γ.nth
 
 /-- Substitution of a formula context along a context morphism. -/
-def FormulaContext.subst (Γ : FormulaContext xs) (σ : ys ⟶ xs) : FormulaContext ys where
+def FormulaContext.subst (Γ : FormulaContext κ xs) (σ : ys ⟶ xs) : FormulaContext κ ys where
   length := Γ.length
   nth i := (Γ.nth i).subst σ
 
 @[simp]
-lemma FormulaContext.subst_id (Γ : FormulaContext xs) : Γ.subst (𝟙 xs) = Γ := by
+lemma FormulaContext.subst_id (Γ : FormulaContext κ xs) : Γ.subst (𝟙 xs) = Γ := by
   ext <;> simp [subst]
 
-lemma FormulaContext.subst_nth (σ : ys ⟶ xs) (Γ : FormulaContext xs) (i) :
+lemma FormulaContext.subst_nth (σ : ys ⟶ xs) (Γ : FormulaContext κ xs) (i) :
     (Γ.subst σ).nth i = (Γ.nth i).subst σ := by
   simp [subst]
 
-lemma FormulaContext.subst_cons (σ : ys ⟶ xs) (Γ : FormulaContext xs) (φ : Formula xs) :
+lemma FormulaContext.subst_cons (σ : ys ⟶ xs) (Γ : FormulaContext κ xs) (φ : Formula κ xs) :
     (Γ.cons φ).subst σ = (Γ.subst σ).cons (φ.subst σ) := by
   ext
   · simp [subst]
   · simp only [subst, heq_eq_eq]; funext i; cases i using Fin.cases <;> simp
 
-lemma FormulaContext.subst_comp {zs} (σ' : zs ⟶ ys) (σ : ys ⟶ xs) (Γ : FormulaContext xs) :
+lemma FormulaContext.subst_comp {zs} (σ' : zs ⟶ ys) (σ : ys ⟶ xs) (Γ : FormulaContext κ xs) :
     Γ.subst (σ' ≫ σ) = (Γ.subst σ).subst σ' := by
   ext
   · simp [subst]
   · simp only [subst, heq_eq_eq]; funext; simp [Formula.subst_comp]
 
 instance instHAppendFormulaContext :
-    HAppend (FormulaContext xs) (FormulaContext xs) (FormulaContext (κ := κ) xs) where
+    HAppend (FormulaContext κ xs) (FormulaContext κ xs) (FormulaContext (κ := κ) xs) where
   hAppend Δ Γ := {
     length := Δ.length + Γ.length
     nth := Matrix.vecAppend (by simp) Δ.nth Γ.nth
@@ -174,7 +167,7 @@ instance instHAppendFormulaContext :
 
 section
 
-variable (Δ Γ : FormulaContext xs)
+variable (Δ Γ : FormulaContext κ xs)
 
 @[simp]
 lemma FormulaContext.append_length : (Δ ++ Γ).length = Δ.length + Γ.length := by
@@ -234,7 +227,7 @@ lemma FormulaContext.subst_append (σ: ys ⟶ xs) :
 We say that a formula `φ` is a member of a formula context `Γ` if there is a witness `i` such that
 the `i`th formula in `Γ` is `φ`.
 -/
-def FormulaContext.mem (φ : Formula xs) (Γ : FormulaContext (κ := κ) xs) : Type _ :=
+def FormulaContext.mem (φ : Formula κ xs) (Γ : FormulaContext (κ := κ) xs) : Type _ :=
   {i // Γ.nth i = φ}
 
 scoped infixr:62 " ∈' " => FormulaContext.mem
@@ -243,7 +236,7 @@ scoped infixr:62 " ∈' " => FormulaContext.mem
 If a formula is a formula context, then it is also in that same formul context extended with a new
 formula.
 -/
-def FormulaContext.mem_cons {Γ : FormulaContext (κ := κ) xs} {ψ : Formula xs} (ψinΓ : ψ ∈' Γ) (φ) :
+def FormulaContext.mem_cons {Γ : FormulaContext (κ := κ) xs} {ψ : Formula κ xs} (ψinΓ : ψ ∈' Γ) (φ) :
   ψ ∈' Γ.cons φ := ⟨ψinΓ.1.succ, ψinΓ.2⟩
 
 /--
@@ -255,7 +248,7 @@ def FormulaContext.incl (Δ Γ : FormulaContext (κ := κ) xs) :=
 scoped infixr:62 " ⊆' " => FormulaContext.incl
 
 /-- A formula context is included in its own extension. -/
-def FormulaContext.incl_cons (Γ : FormulaContext (κ := κ) xs) (ψ : Formula xs) :
+def FormulaContext.incl_cons (Γ : FormulaContext (κ := κ) xs) (ψ : Formula κ xs) :
   Γ ⊆' (Γ.cons ψ) := fun _ ⟨i, p⟩ ↦ ⟨i.succ, p⟩
 
 /-- Inclusion of formula contexts is preserved under substitution. -/
@@ -278,15 +271,15 @@ def FormulaContext.append_incl_l {Δ Γ Γ' : FormulaContext (κ := κ) xs} :
   fun ξ φ ⟨⟨i, leq⟩, p⟩ ↦
     ξ φ ⟨⟨Γ'.length + i, by simp [leq]⟩, by rw [FormulaContext.append_nth_r' (i := ⟨i, leq⟩), p]⟩
 
-instance instMembershipFormulaContext : Membership (Formula xs) (FormulaContext (κ := κ) xs) where
+instance instMembershipFormulaContext : Membership (Formula κ xs) (FormulaContext (κ := κ) xs) where
   mem Γ φ := ∃ i, Γ.nth i = φ
 
 @[simp]
-lemma FormulaContext.append_nil : Γ ++ FormulaContext.nil xs = Γ := by
+lemma FormulaContext.append_nil : Γ ++ FormulaContext.nil (κ := κ) xs = Γ := by
   ext <;> simp [nil, HAppend.hAppend]
 
 @[simp]
-lemma FormulaContext.nil_append : FormulaContext.nil xs ++ Γ = Γ := by
+lemma FormulaContext.nil_append : FormulaContext.nil (κ := κ) xs ++ Γ = Γ := by
   ext
   · simp [nil, HAppend.hAppend]
   · simp [nil, HAppend.hAppend]
@@ -294,7 +287,7 @@ lemma FormulaContext.nil_append : FormulaContext.nil xs ++ Γ = Γ := by
     grind
 
 @[simp]
-lemma FormulaContext.snoc_append {n : ℕ} (φᵢ : Fin (n + 1) → Formula xs) :
+lemma FormulaContext.snoc_append {n : ℕ} (φᵢ : Fin (n + 1) → Formula κ xs) :
     (Γ ++ { length := n, nth := Matrix.vecInit φᵢ}).snoc (Matrix.vecLast φᵢ) =
     Γ ++ { length := n + 1, nth := φᵢ } := by
   ext
@@ -303,23 +296,13 @@ lemma FormulaContext.snoc_append {n : ℕ} (φᵢ : Fin (n + 1) → Formula xs) 
     rw [← Matrix.vecLast_Append (n := Γ.length) (m := n) Γ.nth φᵢ,
       ← Matrix.vecAppend_init, Matrix.snoc_last_init]
 
-variable (S) in
+variable (S) (κ) in
 /-- A sequent is a pair of formulas (the premise and the conclusion) on a same context. -/
-structure Sequent : Type* where
+structure Sequent where
   ctx : S.Context
-  premise : Formula ctx
-  concl : Formula ctx
+  premise : Formula κ ctx
+  concl : Formula κ ctx
 
-variable (S) in
-/-- A `Theory` is a set of sequents. -/
-class Theory where
-  axioms : Set S.Sequent
-
-attribute [coe] Theory.axioms
-
-instance : Coe (Theory (κ := κ)) (Set S.Sequent) where
-  coe T := T.axioms
-
-instance instMembershipTheory : Membership (S.Sequent) (S.Theory (κ := κ)) := {
-  mem T φ := φ ∈ T.axioms
-}
+variable (S) (κ) in
+/-- A `Theory` is a set of sequents, which are to be taken as the axioms of the theory. -/
+abbrev Theory := Set (S.Sequent κ)

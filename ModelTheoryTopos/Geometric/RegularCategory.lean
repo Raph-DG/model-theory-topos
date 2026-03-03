@@ -9,17 +9,17 @@ import Mathlib.CategoryTheory.RegularCategory.Basic
 import Mathlib.CategoryTheory.Subobject.Lattice
 import Mathlib.CategoryTheory.Limits.Constructions.Over.Basic
 import Mathlib.SetTheory.Cardinal.HasCardinalLT
+import Mathlib.CategoryTheory.Sites.Limits
 import ModelTheoryTopos.ForMathlib.Subobject
+import ModelTheoryTopos.ForMathlib.InitialFromEmpty
 
 open CategoryTheory Limits Regular
 
-universe u v w
+universe u v w r
 
 namespace CategoryTheory
 
 section
-
-variable (κ : Type w) (C : Type u) [Category.{v} C]
 
 /-
 This class is due to Robin Carlier. Its purpose is to allow for the `OrderBot` instance.
@@ -35,42 +35,71 @@ attribute [instance] HasFalses.hasInitial_subobject
 noncomputable instance {C: Type*} [Category* C] (X : C) [HasFalses C] : OrderBot (Subobject X) :=
   Preorder.orderBotOfHasInitial (C := (Subobject X))
 
-class Geometric extends Regular C, HasFalses C where
-  has_joins_subobject (X : C) (I : Set κ) : HasCoproductsOfShape I (Subobject X)
-  isJoin_isStableUnderBaseChange {Y X : C} (f : Y ⟶ X) {I : Set κ} (fP : I → Subobject X) :
+class Geometric (κ : Cardinal.{w}) [κ_isRegular : Fact κ.IsRegular] (C : Type u) [Category.{v} C]
+    extends Regular C, HasFalses C where
+  has_joins_subobject (X : C) (I : Type w) [Fact <| HasCardinalLT I κ] :
+    HasCoproductsOfShape I (Subobject X)
+  isJoin_isStableUnderBaseChange {Y X : C} (f : Y ⟶ X) {I : Type w}
+    [Fact <| HasCardinalLT I κ] (fP : I → Subobject X) :
     ∐ (fun (i : I) ↦ (Subobject.pullback f).obj (fP i)) = (Subobject.pullback f).obj (∐ fP)
 
 attribute [instance] Geometric.has_joins_subobject
 attribute [simp] Geometric.isJoin_isStableUnderBaseChange
 
-abbrev Coherent := Geometric C Bool
+abbrev Coherent.{k} (C : Type u) [Category.{v} C] : Prop :=
+  Geometric (κ_isRegular := ⟨Cardinal.isRegular_aleph0⟩) Cardinal.aleph0.{k} C
 
 end
 
 namespace Geometric
 
-variable {κ : Type w} {C : Type u} [Category.{v} C]
+variable {κ : Cardinal.{w}} [κ_isRegular : Fact κ.IsRegular] {C : Type u} [Category.{v} C]
 variable [geo : Geometric κ C]
 
-lemma emptyJoin_eq_bot (X : C) : ∐ (fun (i : (∅ : Set κ)) ↦ by aesop) = (⊥ : Subobject X) := by
+local instance foo (I : Type w) [IsEmpty I] : Fact <| HasCardinalLT I κ :=
+  ⟨hasCardinalLT_of_finite _ _ (Cardinal.IsRegular.aleph0_le κ_isRegular.out)⟩
+
+include geo in
+lemma foo' (I : Type w) [IsEmpty I] (X : C) (f : I → Subobject X) : HasCoproduct f := by
+  apply hasColimit_isEmpty_of_hasInitial
+
+lemma emptyJoin_eq_bot' (X : C) (I : Type*) [IsEmpty I] (f : I → Subobject X) [h : HasCoproduct f] :
+  ∐ f = (⊥ : Subobject X) := by
   apply le_bot_iff.mp
   apply leOfHom
   apply Limits.Sigma.desc
-  grind
+  intro b
+  exact IsEmpty.elim inferInstance b
 
+def myfunc (X : C) : PEmpty.{k} → Subobject X := PEmpty.elim
+
+noncomputable def test (X : C) : Subobject X := ∐ (myfunc.{u,v,w+1} X)
+
+lemma emptyJoin_eq_bot (X : C) :
+    ∐ (myfunc.{u,v,w + 1} X) = (⊥ : Subobject X) := by
+  apply le_bot_iff.mp
+  apply leOfHom
+  apply Limits.Sigma.desc
+  intro b
+  exact IsEmpty.elim inferInstance b
+
+-- set_option pp.universes true
 @[simp]
 lemma bot_isStableUnderBaseChange {Y X : C} (f : Y ⟶ X) :
     (Subobject.pullback f).obj ⊥ = ⊥ := by
-  rw [← emptyJoin_eq_bot (κ := κ), ← emptyJoin_eq_bot (κ := κ), ← isJoin_isStableUnderBaseChange]
+  rw [← emptyJoin_eq_bot (κ := κ), ← emptyJoin_eq_bot (κ := κ)]
+  have := isJoin_isStableUnderBaseChange f (myfunc X) (κ := κ)
+  rw [← this]
   rw [emptyJoin_eq_bot (κ := κ)]
   apply le_bot_iff.mp
   apply leOfHom
   apply Limits.Sigma.desc
-  grind
+  intro b
+  exact IsEmpty.elim inferInstance b
 
-lemma inf_join_eq_join_inf {X : C} {I : Set κ} (P : Subobject X) (Qᵢ : I → Subobject X) :
+lemma inf_join_eq_join_inf {X : C} (I : Type w) [Fact <| HasCardinalLT I κ] (P : Subobject X) (Qᵢ : I → Subobject X) :
     (P ⨯ ∐ Qᵢ) = ∐ (fun i ↦ P ⨯ Qᵢ i) := by
-  rw [Subobject.prod_eq_inf, Subobject.inf_eq_map_pullback'', ← Geometric.isJoin_isStableUnderBaseChange]
+  rw [Subobject.prod_eq_inf, Subobject.inf_eq_map_pullback'', ← geo.isJoin_isStableUnderBaseChange]
   have := Subobject.mapPullbackAdj P.arrow
   have : (Subobject.map P.arrow).obj (∐ fun i ↦ (Subobject.pullback P.arrow).obj (Qᵢ i)) =
      (∐ fun i ↦ (Subobject.map P.arrow).obj <| (Subobject.pullback P.arrow).obj (Qᵢ i)) := by
