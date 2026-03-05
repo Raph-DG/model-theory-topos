@@ -230,7 +230,6 @@ variable (κ) in
 /-- The interpretation of a formula, by cases. -/
 @[reducible, simp]
 noncomputable def Formula.interpret {xs : Context S} : xs ⊢ᶠ𝐏 →
--- noncomputable def Formula.interpret {xs : Context S} : S.Formula κ xs →
     (Subobject ⟦M | xs⟧ᶜ)
   | rel R t => (Subobject.pullback ⟦M | t⟧ᵗ).obj <| M.Relations R
   | ⊤' => ⊤

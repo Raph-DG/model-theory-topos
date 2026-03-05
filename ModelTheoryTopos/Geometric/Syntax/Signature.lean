@@ -17,6 +17,9 @@ namespace Signature
 /--
 The type of derived sorts, i.e. those that are tuples (or tuples of tuples, etc.) of the original
 type of sorts.
+
+Implementation note: We use this presentation, instead of, say, just considering `Fin n → Sorts`
+because this way it's easier to pair terms. See `Term.pair`.
 -/
 inductive DerivedSorts (Sorts : Type*) where
   | inj : Sorts → DerivedSorts Sorts
@@ -101,7 +104,18 @@ structure Signature where
 instance : CoeSort Signature Type* where
   coe S := Signature.DerivedSorts S.Sorts
 
-def Signature.extend {S' : Type} (S : Signature) (f : S.Sorts → S') : Signature where
+def Signature.extendSorts {S' : Type} (S : Signature) (f : S.Sorts → S') : Signature where
   Sorts := S'
   Functions := SortedSymbolsWOutput.map f S.Functions
   Relations := SortedSymbols.map f S.Relations
+
+def Signature.extendSymbols (S : Signature) (X : Type*) (h : X → DerivedSorts S.Sorts) : Signature where
+  Sorts := S.Sorts
+  Functions := S.Functions
+  Relations := {
+    Symbols := S.Relations ⊕ X
+    domain f :=
+      match f with
+      | .inl a => S.Relations.domain a
+      | .inr x => h x
+  }
