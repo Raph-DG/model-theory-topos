@@ -1,4 +1,4 @@
-import Mathlib.Data.Matrix.Notation
+import Mathlib.Data.Matrix.Basic
 
 
 -- a ≍ b iff A <-> B

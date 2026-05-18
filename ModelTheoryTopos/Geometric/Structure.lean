@@ -1,9 +1,9 @@
-import Mathlib.Data.Matrix.Notation
 import Mathlib.CategoryTheory.Subobject.Basic
 import Mathlib.CategoryTheory.Subobject.Lattice
 import Mathlib.CategoryTheory.Limits.Shapes.FiniteLimits
 import Mathlib.CategoryTheory.MorphismProperty.Limits
 import Mathlib.CategoryTheory.Limits.Shapes.RegularMono
+import Mathlib.CategoryTheory.Subobject.Limits
 import ModelTheoryTopos.Geometric.Syntax.Formula
 import ModelTheoryTopos.Geometric.Syntax.Derivation
 import ModelTheoryTopos.Geometric.RegularCategory
@@ -25,7 +25,7 @@ We introduce the following notation to interpret different syntax:
 - `⟦ M | Γ⟧ᶠᶜ` => Interpretation of formula contexts.
 -/
 
-open CategoryTheory Limits Signature
+open CategoryTheory Limits Signature Geometric
 namespace Signature
 
 universe u v
@@ -58,32 +58,34 @@ noncomputable section
 
 variable (M : Structure S C) {ys xs : S.Context} (σ : ys ⟶ xs)
 
-notation:arg "⟦" M "|" A "⟧ᵈ" => DerivedSorts.interpret (Structure.sorts M) A
+notation3:arg "⟦" M "|" A "⟧ᵈ" => DerivedSorts.interpret (Structure.sorts M) A
 
 /-- The interpretation of a context is the product of the interpretation of each sort in it. -/
 @[reducible]
 def Context.interpret (xs : S.Context) : C :=
   ∏ᶜ (fun i ↦ ⟦M | xs.nth i⟧ᵈ)
 
-notation:arg "⟦" M "|" xs "⟧ᶜ" => Context.interpret M xs
-notation:arg "⟦" M "|" A "⟧ˢ" => Structure.sorts (self := M) A
+notation3:arg "⟦" M "|" xs "⟧ᶜ" => Context.interpret M xs
+notation3:arg "⟦" M "|" A "⟧ˢ" => Structure.sorts (self := M) A
 
 /-- The interpretation of a term, by cases. -/
 @[reducible]
 def Term.interpret {A : S} :
     ⊢ᵗ[xs] A → (⟦M | xs⟧ᶜ ⟶ (⟦M | A⟧ᵈ))
-  | .var v => Pi.π (fun i ↦ ⟦M | xs.nth i⟧ᵈ) v ≫ eqToHom (by aesop)
+  | .var v => Pi.π (fun i ↦ ⟦M | xs.nth i⟧ᵈ) v
   | .func f t => t.interpret ≫ M.Functions f
   | pair tᵢ => Pi.lift fun i ↦ (tᵢ i).interpret
   | proj (Aᵢ := Aᵢ) t i => t.interpret ≫ Pi.π (fun i ↦ ⟦M | Aᵢ i⟧ᵈ) i
 
-notation:arg "⟦" M "|" t "⟧ᵗ" =>
+notation3:arg "⟦" M "|" t "⟧ᵗ" =>
   Term.interpret M t
 
 @[simp]
 lemma Term.eqToHom_sort {A B : S} (p : A = B) (t : ⊢ᵗ[xs] A) :
     ⟦M| p ▸ t⟧ᵗ = ⟦M | t⟧ᵗ ≫ eqToHom (p ▸ rfl : ⟦M|A⟧ᵈ=⟦M|B⟧ᵈ) := by
   induction p; simp
+
+lemma Term.interpret_var {A : S} : ⟦M|ys.var A⟧ᵗ = Pi.π _ 0 := rfl
 
 @[simp]
 lemma Term.interpret_pair_proj {xs n} {Aᵢ : (i : Fin n) → S}
@@ -95,17 +97,23 @@ lemma Term.interpret_proj {xs n} {Aᵢ : (i : Fin n) → S} (t : ⊢ᵗ[xs] .pro
     ⟦M|Term.pair (fun i ↦ t.proj i)⟧ᵗ = ⟦M|t⟧ᵗ := by
   apply Pi.hom_ext; simp
 
+lemma Term.interpret_nthTerm {i : Fin xs.length} :
+    ⟦M|xs.nthTerm i⟧ᵗ = Pi.π _ i := by
+  simp [Context.nthTerm]
+
 /-- The interpretation of a context morphism. -/
 @[reducible]
 def Context.Hom.interpret : ⟦M | ys⟧ᶜ ⟶ ⟦M | xs⟧ᶜ := Pi.lift (fun i ↦ ⟦M | σ i⟧ᵗ)
 
-notation:arg "⟦" M "|" σ "⟧ʰ" => Context.Hom.interpret M σ
+notation3:arg "⟦" M "|" σ "⟧ʰ" => Context.Hom.interpret M σ
 
 @[simp]
 lemma Context.Hom.interpret_id : ⟦M | 𝟙 xs⟧ʰ = 𝟙 ⟦M | xs⟧ᶜ := by
   refine Pi.hom_ext _ _ (fun i ↦ ?_)
   simp [CategoryStruct.id, Context.nthTerm, Term.interpret]
 
+lemma Term.interpret_π : ⟦M|xs.π A i⟧ᵗ = Pi.π _ i.succ := by
+  simp [Context.π, interpret]
 
 @[simp]
 lemma Context.Hom.interpret_subst {A : S} (t : ⊢ᵗ[xs] A) :
@@ -132,15 +140,47 @@ def Context.interpretConsIso (xs : S.Context) (A : S) :
   inv := Pi.lift (Fin.cases prod.fst (fun i ↦ prod.snd ≫ Pi.π _ i))
   hom_inv_id := by apply Pi.hom_ext; intro i; cases i using Fin.cases <;> simp
 
-lemma Context.Hom.interpret_consId {A : S} (t : ⊢ᵗ[xs] A) :
-  ⟦M|Context.Hom.consId t⟧ʰ =
-    (prod.lift ⟦M|t⟧ᵗ (𝟙 ⟦M|xs⟧ᶜ)) ≫ (Context.interpretConsIso M xs A).inv :=
-  sorry
+lemma Context.interpretConsIso_naturality {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} :
+    prod.map (𝟙 _) ⟦M|σ⟧ʰ ≫ (interpretConsIso M xs A).inv =
+      (interpretConsIso M ys A).inv ≫ ⟦M|(consFunctor A).map σ⟧ʰ := by
+  apply Pi.hom_ext
+  intro i
+  cases i using Fin.cases with
+  | zero => simp [interpretConsIso, consFunctor, Hom.cons, Term.interpret_var]
+  | succ i =>
+    simp [interpretConsIso, consFunctor, Hom.cons, CategoryStruct.comp]
+    rw [← Category.assoc]
+    congr
+    apply (cancel_epi (interpretConsIso M ys A).hom).mp
+    simp [interpretConsIso]
+    apply Pi.hom_ext
+    simp [Context.π, Term.interpret]
 
-end
+@[simp]
+lemma Context.interpretConsIsoCompπ {A : S} :
+    (Context.interpretConsIso M xs A).inv ≫ ⟦M|xs.π A⟧ʰ = prod.snd := by
+  apply Pi.hom_ext
+  intro i
+  simp [Context.interpretConsIso]
+  simp [Term.interpret_π]
 
-variable {S : Signature} {C : Type u} [Category.{v} C]
-variable [κ : SmallUniverse S] [G : Geometric κ C] (M : Structure S C)
+lemma Context.Hom.consIdCompπ {A : S} (t : ⊢ᵗ[xs] A) : ⟦M|t⟧ᵗ = ⟦M|consId t⟧ʰ ≫ (Pi.π _ 0) := by
+  simp [consId, cons]
+
+lemma Context.Hom.consId_equalizer {A : S} {t1 t2 : ⊢ᵗ[xs] A}
+    [HasEqualizer ⟦M|consId t1⟧ʰ ⟦M|consId t2⟧ʰ] [HasEqualizer ⟦M|t1⟧ᵗ ⟦M|t2⟧ᵗ] :
+    equalizerSubobject ⟦M|Context.Hom.consId t1⟧ʰ ⟦M|Context.Hom.consId t2⟧ʰ =
+      equalizerSubobject ⟦M|t1⟧ᵗ ⟦M|t2⟧ᵗ := by
+  refine Subobject.skeletal _ ⟨iso_of_both_ways (Subobject.homOfFactors ?_) (Subobject.homOfFactors ?_)⟩
+  · apply equalizerSubobject_factors
+    rw [Context.Hom.consIdCompπ, Context.Hom.consIdCompπ, equalizerSubobject_arrow_comp_assoc]
+  · apply equalizerSubobject_factors
+    apply Pi.hom_ext
+    intro i
+    simp
+    cases i using Fin.cases with
+    | zero => simp [consId, cons]; exact equalizerSubobject_arrow_comp ⟦M|t1⟧ᵗ ⟦M|t2⟧ᵗ
+    | succ i => simp [consId, cons]
 
 @[simp]
 lemma Term.interpret_subst
@@ -163,30 +203,59 @@ lemma Context.Hom.interpret_comp (σ : xs ⟶ ys) (σ' : ys ⟶ zs) :
   rw [← Term.interpret_subst]
   rfl
 
+lemma Context.consFunctor_IsPullback {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} :
+    IsPullback ⟦M|ys.π A⟧ʰ ⟦M|(Context.consFunctor A).map σ⟧ʰ ⟦M|σ⟧ʰ ⟦M|xs.π A⟧ʰ := by
+    fapply IsPullback.of_iso <| IsPullback.of_prod_fst_with_id ⟦M|σ⟧ʰ ⟦M|A⟧ᵈ <;> try simp -- ASK: why simp not triggering?
+    · exact prod.braiding _ _ ≪≫ (Context.interpretConsIso M ys A).symm
+    · exact Iso.refl _
+    · exact prod.braiding _ _ ≪≫ (Context.interpretConsIso M xs A).symm
+    · exact Iso.refl _
+    · apply Pi.hom_ext
+      intro i
+      simp [Term.interpret_π, interpretConsIso]
+    · simp only [Iso.trans_hom, prod.braiding_hom, Iso.symm_hom, Category.assoc]
+      rw [← Context.interpretConsIso_naturality, ← Category.assoc]
+      simp
+    · simp
+    · simp
+      rw [Context.interpretConsIsoCompπ] -- Why is this not simped above?
+      simp
+
+end
+
+variable {S : Signature} {C : Type u} [Category.{v} C]
+variable {κ : Cardinal.{w}} [κ_isRegular : Fact κ.IsRegular]
+variable [G : Geometric κ C] [HasForalls C] [HasImplies C] (M : Structure S C)
+
+variable (κ) in
 /-- The interpretation of a formula, by cases. -/
 @[reducible, simp]
 noncomputable def Formula.interpret {xs : Context S} : xs ⊢ᶠ𝐏 →
-    (Subobject <| ⟦M | xs ⟧ᶜ)
-  | .rel R t => (Subobject.pullback ⟦M | t⟧ᵗ).obj <| M.Relations R
-  | .true => ⊤
-  | .false => ⊥
-  | .conj φ ψ => φ.interpret ⨯ ψ.interpret
-  | .eq t1 t2 => equalizerSubobject ⟦M | t1⟧ᵗ ⟦M | t2⟧ᵗ
-  | .exists (A := A) φ => (Subobject.exists ((xs.π A).interpret M)).obj φ.interpret
-  | .infdisj φᵢ => ∐ (fun i ↦ Formula.interpret (φᵢ i))
+    (Subobject ⟦M | xs⟧ᶜ)
+  | rel R t => (Subobject.pullback ⟦M | t⟧ᵗ).obj <| M.Relations R
+  | ⊤' => ⊤
+  | ⊥' => ⊥
+  | φ ∧' ψ => φ.interpret ⨯ ψ.interpret
+  | t1 =' t2 => equalizerSubobject ⟦M | t1⟧ᵗ ⟦M | t2⟧ᵗ
+  | ∃' φ => (Subobject.exists ((xs.π _).interpret M)).obj φ.interpret
+  | ⋁' φᵢ => ∐ (fun i ↦ Formula.interpret (φᵢ i))
+  | ∀' φ => (CategoryTheory.«forall» ((xs.π _).interpret M)).obj φ.interpret
+  | φ →' ψ => (ihom φ.interpret).obj ψ.interpret
 
-notation:arg "⟦" M "|" φ "⟧ᶠ" =>
-  Formula.interpret M φ
+
+scoped syntax "⟦" term "|" term "⟧ᶠ" : term
+scoped macro_rules
+  | `(⟦ $M | $φ ⟧ᶠ) => `(Formula.interpret $(Lean.mkIdent `κ) $M $φ) -- -- Hack to not reference κ
 
 @[simp]
 lemma Formula.interpret_subst
-    {ys xs : Context S} (σ: ys ⟶ xs) (φ : xs ⊢ᶠ𝐏) :
+    {ys xs : Context S} (σ : ys ⟶ xs) (φ : xs ⊢ᶠ𝐏) :
     ⟦M | φ.subst σ⟧ᶠ = (Subobject.pullback ⟦M|σ⟧ʰ).obj ⟦M | φ⟧ᶠ := by
-  induction φ with
+  induction φ generalizing ys with
   | rel R t => simp [Subobject.pullback_comp]
   | true => simp [Subobject.pullback_top]
-  | false => simp only [interpret]; sorry
-  | conj P Q hp hq => simp [interpret, hp, hq]
+  | false => simp [bot_isStableUnderBaseChange (κ := κ)]
+  | conj P Q hp hq => simp [interpret, hp, hq, Subobject.prod_eq_inf, Subobject.inf_pullback]
   | infdisj fP h =>
       simp only [interpret]
       rw [← G.isJoin_isStableUnderBaseChange]
@@ -194,21 +263,24 @@ lemma Formula.interpret_subst
       congr
   | eq t1 t2 =>
       simp only [interpret]
-      rw [← Subobject.pullback_equalizer]
+      rw [Limits.pullback_equalizer]
       congr <;> simp
   | @«exists» A xs φ hp =>
       simp only [interpret]
-      sorry
+      rw [hp ((Context.consFunctor A).map σ)]
+      apply Regular.frobenius_reciprocity (h := Context.consFunctor_IsPullback _ _)
+  | @«forall» A xs φ hp => sorry
+  | implies _ _ h h' => sorry
 
 /--
 A model interprets a sequent if the interpretation of the premise is less than the interpretation of
 the conclusion in the poset of subobjects.
 -/
-def Sequent.interpret (U : S.Sequent) : Prop :=
+def Sequent.interpret (U : S.Sequent κ) : Prop :=
   ⟦M | U.premise⟧ᶠ ≤ ⟦M | U.concl⟧ᶠ
 
 /-- A model interprets a theory if it interprets all of its sequents. -/
-def Theory.interpret (T : S.Theory) : Prop := ∀ Seq ∈ T.axioms, Seq.interpret M
+def Theory.interpret (T : S.Theory κ) : Prop := ∀ Seq ∈ T, Seq.interpret M
 
 /--
 The interpretation of a formula context, which is the product of the interpretation of all its
@@ -216,14 +288,14 @@ formulas.
 -/
 @[reducible]
 noncomputable def FormulaContext.interpret
-    {xs : Context S} (Γ : FormulaContext xs) : Subobject ⟦M|xs⟧ᶜ :=
+    {xs : Context S} (Γ : FormulaContext κ xs) : Subobject ⟦M|xs⟧ᶜ :=
   ∏ᶜ (fun i ↦ ⟦M | Γ.nth i⟧ᶠ)
 
 notation3:arg "⟦" M "|" Γ "⟧ᶠᶜ" => FormulaContext.interpret (M := M) Γ
 
 @[simp]
 lemma FormulaContext.interpret_append
-    {xs : Context S} (Γ Δ : FormulaContext xs) :
+    {xs : Context S} (Γ Δ : FormulaContext κ xs) :
     ⟦M|Γ ++ Δ⟧ᶠᶜ = (⟦M|Γ⟧ᶠᶜ ⨯ ⟦M|Δ⟧ᶠᶜ) := by
   apply Subobject.skeletal_subobject
   simp [interpret]
@@ -253,7 +325,7 @@ lemma FormulaContext.interpret_append
 
 @[simp]
 lemma FormulaContext.interpret_cons
-    {xs : Context S} (Γ : FormulaContext xs) (φ : xs ⊢ᶠ𝐏) :
+    {xs : Context S} (Γ : FormulaContext κ xs) (φ : xs ⊢ᶠ𝐏) :
     ⟦M|Γ.cons φ⟧ᶠᶜ = (⟦M|Γ⟧ᶠᶜ ⨯ ⟦M|φ⟧ᶠ) := by
   apply Subobject.skeletal_subobject
   simp [interpret]
@@ -273,43 +345,35 @@ lemma FormulaContext.interpret_cons
       apply Pi.π
 
 lemma FormulaContext.interpret_cons_pullback
-    {xs : Context S} (Γ : FormulaContext xs) {I : Set κ} (P : xs ⊢ᶠ𝐏) :
+    {xs : Context S} (Γ : FormulaContext κ xs) (P : xs ⊢ᶠ𝐏) :
     ⟦M|Γ.cons P⟧ᶠᶜ = (Subobject.map (⟦M|Γ⟧ᶠᶜ).arrow).obj
-      (((Subobject.pullback (⟦M|Γ⟧ᶠᶜ).arrow).obj ⟦M|P⟧ᶠ))  := by
-  -- This should follow from the above and products in `Subobject X` being pullbacks in `C`
-  sorry
-
-lemma FormulaContext.interpret_eq (t1 t2 : ⊢ᵗ[xs] A) :
-  ⟦M|t1 =' t2⟧ᶠ =
-    equalizerSubobject ⟦M|Context.Hom.consId t1⟧ʰ ⟦M|Context.Hom.consId t2⟧ʰ := sorry
+      (((Subobject.pullback (⟦M|Γ⟧ᶠᶜ).arrow).obj ⟦M|P⟧ᶠ)) := by
+  rw [FormulaContext.interpret_cons, ← Subobject.inf_eq_map_pullback'', Subobject.prod_eq_inf]
 
 lemma FormulaContext.interpret_subst
-    {xs ys : Context S} (Γ : FormulaContext xs) (σ : ys ⟶ xs) :
+    {xs ys : Context S} (Γ : FormulaContext κ xs) (σ : ys ⟶ xs) :
     ⟦M|Γ.subst σ⟧ᶠᶜ = (Subobject.pullback ⟦M|σ⟧ʰ).obj ⟦M|Γ⟧ᶠᶜ := by
-  simp [FormulaContext.interpret, FormulaContext.subst_nth]
-  -- Products commute with pullbacks
-  sorry
+  simp [FormulaContext.interpret, FormulaContext.subst_nth, Subobject.prod_pullback]
+  rfl
 
 lemma FormulaContext.interpret_cons_join
-    {xs : Context S} (Γ : FormulaContext xs) {I : Set κ} (Pᵢ : I → xs ⊢ᶠ𝐏) :
+    {xs : Context S} (Γ : FormulaContext κ xs) {I : Type w} [Fact <| HasCardinalLT I κ] (Pᵢ : I → xs ⊢ᶠ𝐏) :
     ⟦M|Γ.cons (⋁' Pᵢ)⟧ᶠᶜ = ∐ fun i ↦ ⟦M|Γ.cons (Pᵢ i)⟧ᶠᶜ := by
-  rw [FormulaContext.interpret_cons_pullback]
-  unfold Formula.interpret
-  rw [← Geometric.isJoin_isStableUnderBaseChange]
-  simp
-  ext
-  · sorry
-  · sorry
-  · sorry
+  rw [FormulaContext.interpret_cons]
+  rw [Formula.interpret]
+  rw [Geometric.inf_join_eq_join_inf (κ := κ)]
+  congr
+  funext; simp
 
 /--
 If there is a derivation of a formula `φ` in context `Γ`, then it is the case that
 `⟦M | Γ⟧ᶠᶜ ≤ ⟦M | φ⟧ᶠ` whenever the model `M` satisfies all the axioms in theory.
 -/
-theorem Soundness {T : S.Theory} {xs : Context S} {Γ : FormulaContext xs} {φ : xs ⊢ᶠ𝐏} :
-  Derivation (T := T) Γ φ → Theory.interpret M T →
+theorem Soundness {T : S.Theory κ} {xs : Context S} {Γ : FormulaContext κ xs} {φ : xs ⊢ᶠ𝐏} :
+    Theory.interpret M T → Γ ⊢ᵈ φ →
+    -- Γ ⊢ᵈ φ → Theory.interpret M T →
     (⟦M | Γ⟧ᶠᶜ ≤ ⟦M | φ⟧ᶠ) := by
-  intro D int
+  intro int D
   induction D with
   | «axiom» φinT D hp =>
       apply le_trans hp; simp only [Formula.interpret_subst];
@@ -321,7 +385,7 @@ theorem Soundness {T : S.Theory} {xs : Context S} {Γ : FormulaContext xs} {φ :
   | conj_elim_l D h => exact (h.hom ≫ prod.fst).le
   | conj_elim_r D h => exact (h.hom ≫ prod.snd).le
   | disj_intro Pᵢ i D h => exact (h.hom ≫ Sigma.ι (fun i ↦ ⟦M|Pᵢ i⟧ᶠ) i).le
-  | @disj_elim xs Γ Q I Pᵢ D Dᵢ h h' =>
+  | @disj_elim xs Γ Q I _ Pᵢ D Dᵢ h h' =>
       apply leOfHom
       refine ?_ ≫ eqToHom (Γ.interpret_cons_join M Pᵢ) ≫ Sigma.desc (fun b ↦ (h' b).hom)
       simp only [FormulaContext.interpret_cons]
@@ -332,31 +396,15 @@ theorem Soundness {T : S.Theory} {xs : Context S} {Γ : FormulaContext xs} {φ :
       refine Subobject.le_of_comm ?_ ?_
       · apply (Subobject.isPullback _ _).lift
           ((Subobject.ofLE _ _ h') ≫ (Subobject.pullbackπ _ _)) (⟦M|Γ'⟧ᶠᶜ ⨯ ⟦M|Γ⟧ᶠᶜ).arrow
-        rw [Category.assoc, Subobject.pullback_condition]
-        simp
-        have : equalizerSubobject ⟦M|t1⟧ᵗ ⟦M|t2⟧ᵗ =
-            equalizerSubobject ⟦M|Context.Hom.consId t1⟧ʰ ⟦M|Context.Hom.consId t2⟧ʰ := by
-          rw [Context.Hom.interpret_consId, Context.Hom.interpret_consId]
-          have : equalizerSubobject (prod.lift ⟦M|t1⟧ᵗ (𝟙 ⟦M|xs⟧ᶜ) ≫ (Context.interpretConsIso M xs A).inv)
-               (prod.lift ⟦M|t2⟧ᵗ (𝟙 ⟦M|xs⟧ᶜ) ≫ (Context.interpretConsIso M xs A).inv) =  equalizerSubobject (prod.lift ⟦M|t1⟧ᵗ (𝟙 ⟦M|xs⟧ᶜ))
-                 (prod.lift ⟦M|t2⟧ᵗ (𝟙 ⟦M|xs⟧ᶜ)) := by
-            -- This should follow from the fact that the equalizer of f >> h and g >> h for an epi h is the equalizer of f and g
-            fapply Subobject.mk_eq_mk_of_comm
-            · sorry
-            · sorry
-          rw [this]
-          fapply Subobject.mk_eq_mk_of_comm
-          · apply Iso.symm
-            apply EqualizerIso
-          · simp
-            rw [Equalizer_eq']
-        rw [this] at h
-        have : (⟦M|Γ'⟧ᶠᶜ ⨯ ⟦M|Γ⟧ᶠᶜ).arrow =
+        rw [Category.assoc, (Subobject.isPullback _ _).w, Subobject.ofLE_arrow_assoc]
+        rw [← Context.Hom.consId_equalizer] at h
+        have :
+          (⟦M|Γ'⟧ᶠᶜ ⨯ ⟦M|Γ⟧ᶠᶜ).arrow =
           Subobject.ofLE _ _ (leOfHom (prod.snd (X := ⟦M|Γ'⟧ᶠᶜ) (Y := ⟦M|Γ⟧ᶠᶜ))) ≫
-            Subobject.ofLE _ _ h ≫ (equalizerSubobject ⟦M|Context.Hom.consId t1⟧ʰ ⟦M|Context.Hom.consId t2⟧ʰ).arrow :=
-          sorry
-        rw [this]
-        rw [Category.assoc, Category.assoc, Limits.equalizerSubobject_arrow_comp]
+            Subobject.ofLE _ _ h ≫
+            (equalizerSubobject ⟦M|Context.Hom.consId t1⟧ʰ ⟦M|Context.Hom.consId t2⟧ʰ).arrow := by
+          simp
+        rw [this, Category.assoc, Category.assoc, Limits.equalizerSubobject_arrow_comp]
         simp
       · simp
   | @eq_proj_pair xs n A tᵢ i Γ => simp
@@ -364,17 +412,20 @@ theorem Soundness {T : S.Theory} {xs : Context S} {Γ : FormulaContext xs} {φ :
       have : IsIso (equalizer.ι ⟦M|Term.pair fun i ↦ t.proj i⟧ᵗ ⟦M|t⟧ᵗ) :=
         equalizer.ι_of_eq <| Term.interpret_proj M t
       simp [CategoryTheory.Subobject.mk_eq_top_of_isIso]
-  | exists_intro φ t D h =>
+  | @exists_intro xs A Γ φ t D h =>
       rw [Formula.interpret_subst] at h
       refine le_trans h ?_
-      apply Subobject.le_of_comm ((Subobject.pullbackπ _ _) ≫ Subobject.existsπ _ _)
-      simp
-      rw [Subobject.existsπ_sq, ← Category.assoc, Subobject.pullback_condition]
-      rw [Category.assoc, ← Context.Hom.interpret_comp]
+      apply Subobject.le_of_comm ((Subobject.pullbackπ _ _) ≫ (Subobject.imageFactorisation _ _).F.e)
+      have :
+        ((Subobject.exists ⟦M|xs.π A⟧ʰ).obj ⟦M|φ⟧ᶠ).arrow =
+          (Subobject.imageFactorisation ⟦M|xs.π A⟧ʰ ⟦M|φ⟧ᶠ).F.m := rfl
+      rw [Category.assoc, this, (Subobject.imageFactorisation ⟦M|xs.π A⟧ʰ ⟦M|φ⟧ᶠ).F.fac]
+      rw [(Subobject.isPullback _ _).w_assoc, ← Context.Hom.interpret_comp]
       simp
   | @exists_elim xs A Γ φ D_exists ψ D ih_exists ih_D =>
       apply le_trans (leOfHom <| prod.lift (homOfLE ih_exists) (𝟙 _))
-      rw [← Geometric.frobenius (κ := κ)]
+      rw [Subobject.prod_eq_inf, ← Regular.exists_inf_pullback_eq_exists_inf,
+        ← Subobject.prod_eq_inf]
       apply leOfHom
       apply (Adjunction.homEquiv (Subobject.existsPullbackAdj ⟦M|xs.π A⟧ʰ)
         (⟦M|φ⟧ᶠ ⨯ (Subobject.pullback ⟦M|xs.π A⟧ʰ).obj ⟦M|Γ⟧ᶠᶜ) ⟦M|ψ⟧ᶠ).invFun
@@ -382,6 +433,32 @@ theorem Soundness {T : S.Theory} {xs : Context S} {Γ : FormulaContext xs} {φ :
       refine eqToHom ?_≫ homOfLE ih_D
       rw [FormulaContext.interpret_cons, FormulaContext.interpret_subst]
       rw [Subobject.prod_eq_inf, Subobject.prod_eq_inf, inf_comm]
+  | @implies_intro xs Γ φ ψ _ ih =>
+      simp only [Formula.interpret]
+      rw [FormulaContext.interpret_cons] at ih
+      apply leOfHom
+      exact (ihom.adjunction ⟦M|φ⟧ᶠ).homEquiv _ _ (homOfLE (by
+        rw [Subobject.prod_eq_inf] at ih
+        show ⟦M|φ⟧ᶠ ⊓ ⟦M|Γ⟧ᶠᶜ ≤ ⟦M|ψ⟧ᶠ
+        rw [inf_comm]; exact ih))
+  | @implies_elim xs Γ φ ψ _ _ ih_imp ih =>
+      simp only [Formula.interpret] at ih_imp
+      apply le_trans (le_inf ih ih_imp)
+      exact ((ihom.adjunction ⟦M|φ⟧ᶠ).counit.app ⟦M|ψ⟧ᶠ).le
+  | @forall_intro xs A Γ φ _ ih =>
+      simp only [Formula.interpret]
+      rw [FormulaContext.interpret_subst] at ih
+      exact leOfHom ((Adjunction.ofIsLeftAdjoint (Subobject.pullback ⟦M|xs.π A⟧ʰ)).homEquiv _ _ (homOfLE ih))
+  | @forall_elim xs A Γ φ t _ ih =>
+      simp only [Formula.interpret] at ih
+      rw [Formula.interpret_subst]
+      have adj := Adjunction.ofIsLeftAdjoint (Subobject.pullback ⟦M|xs.π A⟧ʰ)
+      have h1 : (Subobject.pullback ⟦M|xs.π A⟧ʰ).obj ⟦M|Γ⟧ᶠᶜ ≤ ⟦M|φ⟧ᶠ :=
+        le_trans (Functor.monotone _ ih) (adj.counit.app ⟦M|φ⟧ᶠ).le
+      have h2 := Functor.monotone (Subobject.pullback ⟦M|Context.Hom.consId t⟧ʰ) h1
+      rw [← Subobject.pullback_comp, ← Context.Hom.interpret_comp,
+          Context.Hom.cons_π, Context.Hom.interpret_id, Subobject.pullback_id] at h2
+      exact h2
 
 end
 end Signature
