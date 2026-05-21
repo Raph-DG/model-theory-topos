@@ -224,7 +224,8 @@ lemma Context.consFunctor_IsPullback {ys xs : S.Context} (σ : ys ⟶ xs) {A : S
 end
 
 variable {S : Signature} {C : Type u} [Category.{v} C]
-variable {κ : Cardinal.{w}} [κ_isRegular : Fact κ.IsRegular] [G : Geometric κ C] (M : Structure S C)
+variable {κ : Cardinal.{w}} [κ_isRegular : Fact κ.IsRegular]
+variable [G : Geometric κ C] [HasForalls C] [HasImplies C] (M : Structure S C)
 
 variable (κ) in
 /-- The interpretation of a formula, by cases. -/
@@ -238,6 +239,9 @@ noncomputable def Formula.interpret {xs : Context S} : xs ⊢ᶠ𝐏 →
   | t1 =' t2 => equalizerSubobject ⟦M | t1⟧ᵗ ⟦M | t2⟧ᵗ
   | ∃' φ => (Subobject.exists ((xs.π _).interpret M)).obj φ.interpret
   | ⋁' φᵢ => ∐ (fun i ↦ Formula.interpret (φᵢ i))
+  | ∀' φ => (CategoryTheory.«forall» ((xs.π _).interpret M)).obj φ.interpret
+  | φ →' ψ => (ihom φ.interpret).obj ψ.interpret
+
 
 scoped syntax "⟦" term "|" term "⟧ᶠ" : term
 scoped macro_rules
@@ -265,6 +269,8 @@ lemma Formula.interpret_subst
       simp only [interpret]
       rw [hp ((Context.consFunctor A).map σ)]
       apply Regular.frobenius_reciprocity (h := Context.consFunctor_IsPullback _ _)
+  | @«forall» A xs φ hp => sorry
+  | implies _ _ h h' => sorry
 
 /--
 A model interprets a sequent if the interpretation of the premise is less than the interpretation of
@@ -427,6 +433,32 @@ theorem Soundness {T : S.Theory κ} {xs : Context S} {Γ : FormulaContext κ xs}
       refine eqToHom ?_≫ homOfLE ih_D
       rw [FormulaContext.interpret_cons, FormulaContext.interpret_subst]
       rw [Subobject.prod_eq_inf, Subobject.prod_eq_inf, inf_comm]
+  | @implies_intro xs Γ φ ψ _ ih =>
+      simp only [Formula.interpret]
+      rw [FormulaContext.interpret_cons] at ih
+      apply leOfHom
+      exact (ihom.adjunction ⟦M|φ⟧ᶠ).homEquiv _ _ (homOfLE (by
+        rw [Subobject.prod_eq_inf] at ih
+        show ⟦M|φ⟧ᶠ ⊓ ⟦M|Γ⟧ᶠᶜ ≤ ⟦M|ψ⟧ᶠ
+        rw [inf_comm]; exact ih))
+  | @implies_elim xs Γ φ ψ _ _ ih_imp ih =>
+      simp only [Formula.interpret] at ih_imp
+      apply le_trans (le_inf ih ih_imp)
+      exact ((ihom.adjunction ⟦M|φ⟧ᶠ).counit.app ⟦M|ψ⟧ᶠ).le
+  | @forall_intro xs A Γ φ _ ih =>
+      simp only [Formula.interpret]
+      rw [FormulaContext.interpret_subst] at ih
+      exact leOfHom ((Adjunction.ofIsLeftAdjoint (Subobject.pullback ⟦M|xs.π A⟧ʰ)).homEquiv _ _ (homOfLE ih))
+  | @forall_elim xs A Γ φ t _ ih =>
+      simp only [Formula.interpret] at ih
+      rw [Formula.interpret_subst]
+      have adj := Adjunction.ofIsLeftAdjoint (Subobject.pullback ⟦M|xs.π A⟧ʰ)
+      have h1 : (Subobject.pullback ⟦M|xs.π A⟧ʰ).obj ⟦M|Γ⟧ᶠᶜ ≤ ⟦M|φ⟧ᶠ :=
+        le_trans (Functor.monotone _ ih) (adj.counit.app ⟦M|φ⟧ᶠ).le
+      have h2 := Functor.monotone (Subobject.pullback ⟦M|Context.Hom.consId t⟧ʰ) h1
+      rw [← Subobject.pullback_comp, ← Context.Hom.interpret_comp,
+          Context.Hom.cons_π, Context.Hom.interpret_id, Subobject.pullback_id] at h2
+      exact h2
 
 end
 end Signature

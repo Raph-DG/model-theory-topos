@@ -45,6 +45,9 @@ inductive Formula (κ : Cardinal.{w}) [κ_isRegular : Fact κ.IsRegular] : S.Con
   | infdisj {xs} {I : Type w} [Fact <| HasCardinalLT I κ] : (I → Formula κ xs) → Formula κ xs
   | eq {xs A} : ⊢ᵗ[xs] A → ⊢ᵗ[xs] A → Formula κ xs
   | exists {A xs} : Formula κ (A ∶ xs) → Formula κ xs
+  | forall {A xs} : Formula κ (A ∶ xs) → Formula κ xs
+  | implies {xs} : Formula κ xs → Formula κ xs → Formula κ xs
+
 
 scoped notation:max "⊤'" => Formula.true
 scoped notation:max "⊥'" => Formula.false
@@ -52,6 +55,8 @@ scoped infixr:62 " ∧' " => Formula.conj
 scoped prefix:100 "⋁'" => Formula.infdisj
 scoped infixr:50 " =' " => Formula.eq
 scoped prefix:110 "∃'" => Formula.exists
+scoped prefix:110 "∀'" => Formula.forall
+scoped infixr:55 "→'" => Formula.implies
 
 
 scoped syntax:25 term:51 " ⊢ᶠ𝐏" : term
@@ -67,10 +72,12 @@ def Formula.subst {ys xs : S.Context} (σ : ys ⟶ xs) (φ : xs ⊢ᶠ𝐏) : ys
   | rel R t => .rel R (t.subst σ)
   | ⊤' => ⊤'
   | ⊥' => ⊥'
-  | φ ∧' Q => (φ.subst σ) ∧' (Q.subst σ)
+  | φ ∧' ψ => (φ.subst σ) ∧' (ψ.subst σ)
   | ⋁' φᵢ => ⋁' (fun i ↦ (φᵢ i).subst σ)
   | t1 =' t2 => (t1.subst σ) =' (t2.subst σ)
-  | .exists (A := A) φ => ∃' (φ.subst ((Context.consFunctor A).map σ))
+  | ∃' φ => ∃' (φ.subst ((Context.consFunctor _).map σ))
+  | ∀' φ => ∀' (φ.subst ((Context.consFunctor _).map σ))
+  | φ →' ψ => (φ.subst σ) →' (ψ.subst σ)
 
 @[simp]
 lemma Formula.subst_id {xs : S.Context} (φ : xs ⊢ᶠ𝐏) :
@@ -82,7 +89,9 @@ lemma Formula.subst_id {xs : S.Context} (φ : xs ⊢ᶠ𝐏) :
   | conj _ _ h h' => simp [h, h']
   | infdisj _ h => simp [h]
   | eq _ _ => simp
-  | @«exists» A zs φ h => simpa using h
+  | «exists» φ h => simpa using h
+  | «forall» φ h => simpa using h
+  | implies _ _ h h' => simp [h, h']
 
 lemma Formula.subst_comp {zs : S.Context} (φ : zs ⊢ᶠ𝐏) :
     {xs ys : S.Context} → (σ : xs ⟶ ys) → (σ' : ys ⟶ zs) →
@@ -95,6 +104,8 @@ lemma Formula.subst_comp {zs : S.Context} (φ : zs ⊢ᶠ𝐏) :
   | infdisj _ h => simp [h]
   | eq _ _ => simp [Term.subst_comp]
   | @«exists» A zs φ h => simp; intro xs ys σ σ'; rw [← h]
+  | @«forall» A zs φ h => simp; intro xs ys σ σ'; rw [← h]
+  | implies _ _ h h' => simp [h, h']
 
 variable (κ) in
 /-- A `FormulaContext` is a vector of formulas. -/

@@ -43,7 +43,12 @@ inductive Derivation : {xs : S.Context} → FormulaContext κ xs → Formula κ 
       (D_exists : Derivation Γ (∃' φ)) {ψ}
       (D : Derivation ((Γ.subst (xs.π A)).cons φ) (ψ.subst (xs.π A))) :
       Derivation Γ ψ
-
+  | implies_intro {Γ φ ψ} (D : Derivation (Γ.cons φ) ψ) : Derivation Γ (φ →' ψ)
+  | implies_elim {Γ φ ψ} (D_imp : Derivation Γ (φ →' ψ)) (D : Derivation Γ φ) : Derivation Γ ψ
+  | forall_intro {xs A} {Γ : S.FormulaContext κ xs} (φ : S.Formula κ (A ∶ xs))
+      (D : Derivation (Γ.subst (xs.π A)) φ) : Derivation Γ (∀' φ)
+  | forall_elim {xs A} {Γ : S.FormulaContext κ xs} {φ : S.Formula κ (A ∶ xs)}
+      (t : S.Term xs A) (D : Derivation Γ (∀' φ)) : Derivation Γ (φ.subst (Context.Hom.consId t))
 
 scoped syntax:25 term " ⊢ᵈ[ " term:51 " ] " term:50 : term
 scoped syntax:25 term " ⊢ᵈ" term:50 : term
@@ -118,6 +123,20 @@ def Derivation.substContextHom {xs} {Γ : FormulaContext κ xs} {φ : Formula κ
       rw [FormulaContext.subst_cons, ← FormulaContext.subst_comp, ← Formula.subst_comp] at D'
       rw [← FormulaContext.subst_comp, ← Formula.subst_comp]
       exact D'
+  | implies_intro D => fun ys σ ↦
+      implies_intro (FormulaContext.subst_cons σ Γ _ ▸ substContextHom D _ σ)
+  | implies_elim D_imp D => fun ys σ ↦
+      implies_elim (substContextHom D_imp _ σ) (substContextHom D _ σ)
+  | forall_intro φ D => fun ys σ ↦ by
+      apply Derivation.forall_intro
+      let D' := substContextHom D _ ((Context.consFunctor _).map σ)
+      rw [← FormulaContext.subst_comp] at D'
+      rw [← FormulaContext.subst_comp]
+      exact D'
+  | forall_elim t D => fun ys σ ↦ by
+      let D' := substContextHom D _ σ
+      rw [← Formula.subst_comp, Context.Hom.consId_naturality, Formula.subst_comp]
+      exact forall_elim _ D'
 
 /--
 Given a derivation of `φ` on context `Γ`, if `Γ ⊆' Δ` then we also have a derivation of `φ` in `Δ`.
@@ -151,6 +170,14 @@ def Derivation.weakenFormulaContext {xs} {Γ : FormulaContext κ xs} {φ : Formu
   | @exists_elim _ _ _ _ xs _ Γ φ D_exists ψ D => fun _ ξ ↦
     exists_elim (.weakenFormulaContext D_exists _ ξ)
       (.weakenFormulaContext D _ (FormulaContext.incl_cons_cons φ (FormulaContext.incl_subst ξ _)))
+  | @implies_intro _ _ _ _ xs Γ φ ψ D => fun _ ξ ↦
+    implies_intro (.weakenFormulaContext D _ (FormulaContext.incl_cons_cons φ ξ))
+  | @implies_elim _ _ _ _ xs Γ φ ψ D_imp D => fun _ ξ ↦
+    implies_elim (.weakenFormulaContext D_imp _ ξ) (.weakenFormulaContext D _ ξ)
+  | @forall_intro _ _ _ _ xs A Γ φ D => fun _ ξ ↦
+    forall_intro φ (.weakenFormulaContext D _ (FormulaContext.incl_subst ξ _))
+  | @forall_elim _ _ _ _ xs A Γ φ t D => fun _ ξ ↦
+    forall_elim t (.weakenFormulaContext D _ ξ)
 
 /-- The functorial action of the `cons` operation on Formula κ context morphisms. -/
 def Derivation.Hom.consMap {xs} {Δ Γ : FormulaContext κ xs} (φ : Formula κ xs)
@@ -192,5 +219,9 @@ def Derivation.subst {xs} {Γ : FormulaContext κ xs} {φ : Formula κ xs}
   | exists_elim D_exists D =>
       Derivation.exists_elim (subst D_exists ξ)
       (subst D (Derivation.Hom.consMap _ (Derivation.Hom.substMap _ ξ)))
+  | implies_intro D => implies_intro (subst D (Derivation.Hom.consMap _ ξ))
+  | implies_elim D_imp D => implies_elim (subst D_imp ξ) (subst D ξ)
+  | forall_intro φ D => forall_intro φ (subst D (Derivation.Hom.substMap _ ξ))
+  | forall_elim t D => forall_elim t (subst D ξ)
 
 end Signature

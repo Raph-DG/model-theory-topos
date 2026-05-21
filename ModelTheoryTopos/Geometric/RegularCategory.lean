@@ -10,6 +10,8 @@ import Mathlib.CategoryTheory.Subobject.Lattice
 import Mathlib.CategoryTheory.Limits.Constructions.Over.Basic
 import Mathlib.SetTheory.Cardinal.HasCardinalLT
 import Mathlib.CategoryTheory.Sites.Limits
+import Mathlib.CategoryTheory.Limits.Constructions.FiniteProductsOfBinaryProducts
+import Mathlib.CategoryTheory.Closed.Monoidal
 import ModelTheoryTopos.ForMathlib.Subobject
 import ModelTheoryTopos.ForMathlib.InitialFromEmpty
 
@@ -188,3 +190,22 @@ theorem frobenius_reciprocity :
 
 end Regular
 end goodFrobenius
+
+variable {C : Type*} [Category* C] [HasPullbacks C] {X Y : C}
+
+abbrev HasForall (f : X ⟶ Y) := (Subobject.pullback f).IsLeftAdjoint
+
+variable (f : X ⟶ Y) [h : HasForall f]
+
+noncomputable def «forall» := (Subobject.pullback f).rightAdjoint
+
+variable (C)
+abbrev HasForalls := ∀ {X Y : C} (f : X ⟶ Y), HasForall f
+
+noncomputable instance [HasPullbacks C] (X : C) : CartesianMonoidalCategory (Subobject X) :=
+    CartesianMonoidalCategory.ofChosenFiniteProducts (C := Subobject X)
+      ⟨asEmptyCone ⊤, Preorder.isTerminalTop _⟩
+      (fun A B ↦ ⟨BinaryFan.mk (homOfLE inf_le_left) (homOfLE inf_le_right),
+        Preorder.isLimitBinaryFan A B⟩)
+
+abbrev HasImplies := ∀ X : C, MonoidalClosed <| Subobject X
