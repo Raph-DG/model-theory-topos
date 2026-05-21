@@ -9,16 +9,6 @@ import Mathlib.Data.Fin.Basic
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Fin.VecNotation
 
-/-!
-# Contexts and terms
-
-In this file we define context and terms over a signatures, as well as provide basic API to use
-them. Notably, we show that contexts form a category and that terms can be substituted along
-morphisms of this category.
-
-We remark that our terms are all well formed and intrinsically typed.
--/
-
 open CategoryTheory Limits
 
 namespace Signature
@@ -26,16 +16,14 @@ namespace Signature
 variable {S : Signature}
 
 variable (S) in
-/-- A context is a vector of sorts of a signature. -/
 @[ext]
 structure Context : Type* where
   length : ℕ
   nth : Fin length → S
 
-/--
-A term on a context `xs` is either (1) a variable appearing in that context, (2) a function
-symbol applied to terms of its domain, (3) a tuple of terms or (4) a projection of a tuple.
--/
+@[reducible]
+def Context.signature : S.Context → Signature := fun _ => S
+
 inductive Term (xs : S.Context) : S → Type* where
   | var (i : Fin xs.length) :  Term xs (xs.nth i)
   | func (f : S.Functions) : Term xs f.domain → Term xs f.codomain
@@ -45,20 +33,14 @@ inductive Term (xs : S.Context) : S → Type* where
 
 scoped notation:25 "⊢ᵗ[" xs:51 "] " t:50  => Term xs t
 
-/-- The nth variable in a context, as a term. -/
 def Context.nthTerm (xs : S.Context) (i : Fin xs.length) : ⊢ᵗ[xs] xs.nth i :=
   Term.var i
 
-/--
-A morphism between two contexts `xs` and `ys` consist of giving a term in context `xs` for each sort
-in the context `ys.
--/
 def Context.Hom (xs ys : S.Context) : Type* := (i : Fin ys.length) → ⊢ᵗ[xs] ys.nth i
 
 instance : Quiver S.Context where
   Hom := Context.Hom
 
-/-- Substitution of a term along a contexts morphism. -/
 @[reducible]
 def Term.subst {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} :
    ⊢ᵗ[xs] A → ⊢ᵗ[ys] A
@@ -67,7 +49,6 @@ def Term.subst {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} :
   | pair tᵢ => pair (fun i ↦ (tᵢ i).subst σ)
   | proj (Aᵢ := Aᵢ) t i => proj (t.subst σ) i
 
-/-- The `CategoryStruct` structure on contexts. -/
 instance : CategoryStruct S.Context where
   id xs := xs.nthTerm
   comp σ σ' i := (σ' i).subst σ
@@ -92,7 +73,7 @@ instance : Category S.Context where
   id_comp σ := by funext; simp [CategoryStruct.comp]
   assoc σ σ' σ'' := funext fun i ↦ by unfold CategoryStruct.comp; apply Term.subst_comp
 
-/-- Extension (or `cons`ing) of a context with a new variable. -/
+
 @[reducible]
 def Context.cons (A : S) (xs : S.Context) : S.Context where
   length := xs.length + 1
@@ -101,11 +82,9 @@ def Context.cons (A : S) (xs : S.Context) : S.Context where
 -- Note that this is `\:`
 scoped[Signature] infixr:67 " ∶ " => Signature.Context.cons
 
-/-- The projection context morphism. -/
 def Context.π (xs : S.Context) (A : S) :
     (A ∶ xs) ⟶ xs := fun i ↦ .var (xs := A ∶ xs) i.succ
 
-/-- The last variable in an extended context, as a term. -/
 def Context.var (xs : S.Context) (A : S) : ⊢ᵗ[A∶xs] A :=
   Term.var 0
 
@@ -113,12 +92,10 @@ def Context.var (xs : S.Context) (A : S) : ⊢ᵗ[A∶xs] A :=
 lemma Context.cons_succ (xs : S.Context) (A : S) (i : Fin xs.length) :
   (A ∶ xs).nth i.succ = xs.nth i := by simp
 
-/-- Extending a context morphism with a new term. -/
 def Context.Hom.cons {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} (t : S.Term ys A) :
     ys ⟶ (A ∶ xs) :=
   Fin.cons t (fun i ↦ Context.cons_succ xs A i ▸ σ i)
 
-/-- The functor induced by the `cons` operation on contexts. -/
 def Context.consFunctor (A : S) : S.Context ⥤ S.Context where
   obj xs := A ∶ xs
   map {xs} {ys} σ := Context.Hom.cons (xs.π A ≫ σ) (xs.var A)
@@ -135,12 +112,10 @@ def Context.consFunctor (A : S) : S.Context ⥤ S.Context where
     | zero => simp [Context.var, Term.subst, Hom.cons]
     | succ i => simp [Context.var, Hom.cons]; rw [← Term.subst_comp, ← Term.subst_comp]; congr
 
-/-- A term in context `xs` induces a context morphism `xs ⟶ (A ∶ xs)`. -/
 def Context.Hom.consId {xs : S.Context} {A : S} (t : S.Term xs A) :
-    xs ⟶ (A ∶ xs) :=
-  Context.Hom.cons (𝟙 xs) t
+  xs ⟶ (A ∶ xs) := Context.Hom.cons (𝟙 xs) t
 
-lemma Context.Hom.consId_naturality {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} (t : S.Term xs A) :
+def Context.Hom.consId_naturality {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} (t : S.Term xs A) :
   (σ ≫ Context.Hom.consId t) =
     (Context.Hom.consId (Term.subst σ t) ≫ (Context.consFunctor A).map σ) := by
   funext i

@@ -10,22 +10,7 @@ import ModelTheoryTopos.Geometric.RegularCategory
 import ModelTheoryTopos.ForMathlib.Subobject
 import ModelTheoryTopos.ForMathlib.Miscellaneous
 
-/-!
-# The interpretation of the syntax into the semantics
-
-In this file we show how to interpret the syntax of geometric logic into geometric category.
-Our main result is `Soundness`, which shows that this interpretation is sound.
-
-We introduce the following notation to interpret different syntax:
-- `⟦ M | A⟧ˢ`  => Interpretation of sorts.
-- `⟦ M | A⟧ᵈ`  => Interpretation of derived sorts.
-- `⟦ M | xs⟧ᶜ` => Interpretation of (term) contexts.
-- `⟦ M | σ⟧ʰ`  => Interpretation of (term) context morphisms.
-- `⟦ M | P⟧ᶠ`  => Interpretation of formulas.
-- `⟦ M | Γ⟧ᶠᶜ` => Interpretation of formula contexts.
--/
-
-open CategoryTheory Limits Signature Geometric
+open CategoryTheory Limits Signature
 namespace Signature
 
 universe u v
@@ -33,10 +18,6 @@ universe u v
 section
 variable {S : Signature} {C : Type u} [Category.{v} C] [HasFiniteProducts C]
 
-/--
-Given a category `C` and a function `Sorts → C` for an arbitrary type `Sorts`, we can
-make a function `DerivedSorts Sorts → C` by mapping each tuple to the product of its entries.
--/
 @[simp, reducible]
 noncomputable def DerivedSorts.interpret {Sorts : Type*} (f : Sorts → C) :
     DerivedSorts Sorts → C := fun
@@ -44,11 +25,6 @@ noncomputable def DerivedSorts.interpret {Sorts : Type*} (f : Sorts → C) :
   | .prod fᵢ => ∏ᶜ (fun i ↦ DerivedSorts.interpret f (fᵢ i))
 
 variable (S) (C) in
-/--
-A structure for a signature `S` in a category `C` consists of an assignment of each sort of `S` to
-an object of `C`, as well as an assignment of each function symbol to a morphism, and finally an
-assignment of each relation symbol to a subobject of the appropriate sort.
--/
 structure Structure where
   sorts : S.Sorts → C
   Functions (f : S.Functions) : f.domain.interpret sorts ⟶ f.codomain.interpret sorts
@@ -60,15 +36,15 @@ variable (M : Structure S C) {ys xs : S.Context} (σ : ys ⟶ xs)
 
 notation3:arg "⟦" M "|" A "⟧ᵈ" => DerivedSorts.interpret (Structure.sorts M) A
 
-/-- The interpretation of a context is the product of the interpretation of each sort in it. -/
 @[reducible]
 def Context.interpret (xs : S.Context) : C :=
   ∏ᶜ (fun i ↦ ⟦M | xs.nth i⟧ᵈ)
 
-notation3:arg "⟦" M "|" xs "⟧ᶜ" => Context.interpret M xs
-notation3:arg "⟦" M "|" A "⟧ˢ" => Structure.sorts (self := M) A
+notation:arg "⟦" M "|" xs "⟧ᶜ" => Context.interpret M xs
+notation:arg "⟦" M "|" A "⟧ˢ" => Structure.sorts (self := M) A
+notation:arg "⟦" M "|" xs "⟧ᵖ" =>
+  Subobject <| ∏ᶜ Structure.sorts (self := M) ∘ Context.nth xs
 
-/-- The interpretation of a term, by cases. -/
 @[reducible]
 def Term.interpret {A : S} :
     ⊢ᵗ[xs] A → (⟦M | xs⟧ᶜ ⟶ (⟦M | A⟧ᵈ))
@@ -97,11 +73,6 @@ lemma Term.interpret_proj {xs n} {Aᵢ : (i : Fin n) → S} (t : ⊢ᵗ[xs] .pro
     ⟦M|Term.pair (fun i ↦ t.proj i)⟧ᵗ = ⟦M|t⟧ᵗ := by
   apply Pi.hom_ext; simp
 
-lemma Term.interpret_nthTerm {i : Fin xs.length} :
-    ⟦M|xs.nthTerm i⟧ᵗ = Pi.π _ i := by
-  simp [Context.nthTerm]
-
-/-- The interpretation of a context morphism. -/
 @[reducible]
 def Context.Hom.interpret : ⟦M | ys⟧ᶜ ⟶ ⟦M | xs⟧ᶜ := Pi.lift (fun i ↦ ⟦M | σ i⟧ᵗ)
 
@@ -130,10 +101,6 @@ lemma Context.Hom.interpret_subst {A : S} (t : ⊢ᵗ[xs] A) :
       simp only [Term.interpret, Context.Hom.interpret]
       rw [← Category.assoc]; congr
 
-/--
-The interpretation of an extended context is isomorphic to the interpretation of the context times
-the interpretation of the new sort.
--/
 def Context.interpretConsIso (xs : S.Context) (A : S) :
   ⟦M | A ∶ xs⟧ᶜ ≅ ⟦M | A⟧ᵈ ⨯ ⟦M | xs⟧ᶜ where
   hom := prod.lift (Pi.π _ 0) (Pi.lift (fun i ↦ Pi.π _ i.succ))
@@ -203,55 +170,25 @@ lemma Context.Hom.interpret_comp (σ : xs ⟶ ys) (σ' : ys ⟶ zs) :
   rw [← Term.interpret_subst]
   rfl
 
-lemma Context.consFunctor_IsPullback {ys xs : S.Context} (σ : ys ⟶ xs) {A : S} :
-    IsPullback ⟦M|ys.π A⟧ʰ ⟦M|(Context.consFunctor A).map σ⟧ʰ ⟦M|σ⟧ʰ ⟦M|xs.π A⟧ʰ := by
-    fapply IsPullback.of_iso <| IsPullback.of_prod_fst_with_id ⟦M|σ⟧ʰ ⟦M|A⟧ᵈ <;> try simp -- ASK: why simp not triggering?
-    · exact prod.braiding _ _ ≪≫ (Context.interpretConsIso M ys A).symm
-    · exact Iso.refl _
-    · exact prod.braiding _ _ ≪≫ (Context.interpretConsIso M xs A).symm
-    · exact Iso.refl _
-    · apply Pi.hom_ext
-      intro i
-      simp [Term.interpret_π, interpretConsIso]
-    · simp only [Iso.trans_hom, prod.braiding_hom, Iso.symm_hom, Category.assoc]
-      rw [← Context.interpretConsIso_naturality, ← Category.assoc]
-      simp
-    · simp
-    · simp
-      rw [Context.interpretConsIsoCompπ] -- Why is this not simped above?
-      simp
-
-end
-
-variable {S : Signature} {C : Type u} [Category.{v} C]
-variable {κ : Cardinal.{w}} [κ_isRegular : Fact κ.IsRegular]
-variable [G : Geometric κ C] [HasForalls C] [HasImplies C] (M : Structure S C)
-
-variable (κ) in
-/-- The interpretation of a formula, by cases. -/
 @[reducible, simp]
 noncomputable def Formula.interpret {xs : Context S} : xs ⊢ᶠ𝐏 →
-    (Subobject ⟦M | xs⟧ᶜ)
-  | rel R t => (Subobject.pullback ⟦M | t⟧ᵗ).obj <| M.Relations R
-  | ⊤' => ⊤
-  | ⊥' => ⊥
-  | φ ∧' ψ => φ.interpret ⨯ ψ.interpret
-  | t1 =' t2 => equalizerSubobject ⟦M | t1⟧ᵗ ⟦M | t2⟧ᵗ
-  | ∃' φ => (Subobject.exists ((xs.π _).interpret M)).obj φ.interpret
-  | ⋁' φᵢ => ∐ (fun i ↦ Formula.interpret (φᵢ i))
-  | ∀' φ => (CategoryTheory.«forall» ((xs.π _).interpret M)).obj φ.interpret
-  | φ →' ψ => (ihom φ.interpret).obj ψ.interpret
+    (Subobject <| ⟦M | xs ⟧ᶜ)
+  | .rel R t => (Subobject.pullback ⟦M | t⟧ᵗ).obj <| M.Relations R
+  | .true => ⊤
+  | .false => ⊥
+  | .conj P Q => P.interpret ⨯ Q.interpret
+  | .eq t1 t2 => equalizerSubobject ⟦M | t1⟧ᵗ ⟦M | t2⟧ᵗ
+  | .exists (A := A) φ => (Subobject.exists ((xs.π A).interpret M)).obj φ.interpret
+  | .infdisj fP => ∐ (fun i ↦ Formula.interpret (fP i))
 
-
-scoped syntax "⟦" term "|" term "⟧ᶠ" : term
-scoped macro_rules
-  | `(⟦ $M | $φ ⟧ᶠ) => `(Formula.interpret $(Lean.mkIdent `κ) $M $φ) -- -- Hack to not reference κ
+notation:arg "⟦" M "|" P "⟧ᶠ" =>
+  Formula.interpret M P
 
 @[simp]
 lemma Formula.interpret_subst
-    {ys xs : Context S} (σ : ys ⟶ xs) (φ : xs ⊢ᶠ𝐏) :
-    ⟦M | φ.subst σ⟧ᶠ = (Subobject.pullback ⟦M|σ⟧ʰ).obj ⟦M | φ⟧ᶠ := by
-  induction φ generalizing ys with
+    {ys xs : Context S} (σ: ys ⟶ xs) (P : xs ⊢ᶠ𝐏) :
+    ⟦M | P.subst σ⟧ᶠ = (Subobject.pullback ⟦M|σ⟧ʰ).obj ⟦M | P⟧ᶠ := by
+  induction P with
   | rel R t => simp [Subobject.pullback_comp]
   | true => simp [Subobject.pullback_top]
   | false => simp [bot_isStableUnderBaseChange (κ := κ)]
@@ -265,27 +202,18 @@ lemma Formula.interpret_subst
       simp only [interpret]
       rw [Limits.pullback_equalizer]
       congr <;> simp
-  | @«exists» A xs φ hp =>
+  | @«exists» A xs P hp =>
       simp only [interpret]
       rw [hp ((Context.consFunctor A).map σ)]
       apply Regular.frobenius_reciprocity (h := Context.consFunctor_IsPullback _ _)
   | @«forall» A xs φ hp => sorry
   | implies _ _ h h' => sorry
 
-/--
-A model interprets a sequent if the interpretation of the premise is less than the interpretation of
-the conclusion in the poset of subobjects.
--/
-def Sequent.interpret (U : S.Sequent κ) : Prop :=
+def Sequent.interpret (U : S.Sequent) : Prop :=
   ⟦M | U.premise⟧ᶠ ≤ ⟦M | U.concl⟧ᶠ
 
-/-- A model interprets a theory if it interprets all of its sequents. -/
-def Theory.interpret (T : S.Theory κ) : Prop := ∀ Seq ∈ T, Seq.interpret M
+def Theory.interpret (T : S.Theory) : Prop := ∀ Seq ∈ T.axioms, Seq.interpret M
 
-/--
-The interpretation of a formula context, which is the product of the interpretation of all its
-formulas.
--/
 @[reducible]
 noncomputable def FormulaContext.interpret
     {xs : Context S} (Γ : FormulaContext κ xs) : Subobject ⟦M|xs⟧ᶜ :=
@@ -365,15 +293,10 @@ lemma FormulaContext.interpret_cons_join
   congr
   funext; simp
 
-/--
-If there is a derivation of a formula `φ` in context `Γ`, then it is the case that
-`⟦M | Γ⟧ᶠᶜ ≤ ⟦M | φ⟧ᶠ` whenever the model `M` satisfies all the axioms in theory.
--/
-theorem Soundness {T : S.Theory κ} {xs : Context S} {Γ : FormulaContext κ xs} {φ : xs ⊢ᶠ𝐏} :
-    Theory.interpret M T → Γ ⊢ᵈ φ →
-    -- Γ ⊢ᵈ φ → Theory.interpret M T →
-    (⟦M | Γ⟧ᶠᶜ ≤ ⟦M | φ⟧ᶠ) := by
-  intro int D
+def Soundness {T : S.Theory} {xs : Context S} {Γ : FormulaContext xs} {P : xs ⊢ᶠ𝐏} :
+  Derivation (T := T) Γ P → Theory.interpret M T →
+    (⟦M | Γ⟧ᶠᶜ ≤ ⟦M | P⟧ᶠ) := by
+  intro D int
   induction D with
   | «axiom» φinT D hp =>
       apply le_trans hp; simp only [Formula.interpret_subst];
